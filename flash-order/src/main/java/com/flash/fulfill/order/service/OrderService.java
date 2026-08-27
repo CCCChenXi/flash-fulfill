@@ -9,14 +9,15 @@ import com.flash.fulfill.common.dto.DeductStockResult;
 import com.flash.fulfill.common.dto.FlashOrderView;
 import com.flash.fulfill.common.dto.OrderFulfillEvent;
 import com.flash.fulfill.common.dto.SeckillOrderCommand;
+import com.flash.fulfill.common.dto.SkuSellView;
 import com.flash.fulfill.common.exception.BizException;
 import com.flash.fulfill.common.util.IdGenerator;
 import com.flash.fulfill.order.entity.FlashOrder;
 import com.flash.fulfill.order.feign.InventoryClient;
+import com.flash.fulfill.order.feign.ProductClient;
 import com.flash.fulfill.order.mapper.OrderMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,16 +37,16 @@ import java.math.BigDecimal;
 public class OrderService {
 
     private final OrderMapper orderMapper;
+    private final ProductClient productClient;
     private final InventoryClient inventoryClient;
     private final RocketMQTemplate rocketMQTemplate;
 
-    @Value("${order.unit-price:99.00}")
-    private BigDecimal unitPrice;
-
     public OrderService(OrderMapper orderMapper,
+                        ProductClient productClient,
                         InventoryClient inventoryClient,
                         RocketMQTemplate rocketMQTemplate) {
         this.orderMapper = orderMapper;
+        this.productClient = productClient;
         this.inventoryClient = inventoryClient;
         this.rocketMQTemplate = rocketMQTemplate;
     }
@@ -67,9 +68,15 @@ public class OrderService {
         order.setSkuId(cmd.getSkuId());
         order.setActivityId(cmd.getActivityId());
         order.setQuantity(cmd.getQuantity());
-        order.setAmount(unitPrice.multiply(BigDecimal.valueOf(cmd.getQuantity())));
         order.setStatus(OrderStatus.INITIAL);
         orderMapper.insert(order);
+
+        if (!resolvePrice(order, cmd)) {
+            order.setStatus(OrderStatus.FAILED);
+            orderMapper.updateById(order);
+            log.warn("商品计价失败,订单标记 FAILED orderNo={} requestId={}", order.getOrderNo(), cmd.getRequestId());
+            return;
+        }
 
         boolean deducted = deductStock(order, cmd);
         if (deducted) {
@@ -81,6 +88,30 @@ public class OrderService {
             orderMapper.updateById(order);
             log.warn("库存扣减失败,订单标记 FAILED orderNo={} requestId={}", order.getOrderNo(), cmd.getRequestId());
             // TODO 生产:对账任务回滚秒抢 Redis 预扣额度,并通知用户
+        }
+    }
+
+    private boolean resolvePrice(FlashOrder order, SeckillOrderCommand cmd) {
+        try {
+            Result<SkuSellView> r = productClient.sellView(cmd.getSkuId());
+            if (r == null || !r.isSuccess() || r.getData() == null) {
+                log.warn("SKU 出售视图不可用 skuId={} result={}", cmd.getSkuId(), r);
+                return false;
+            }
+            SkuSellView view = r.getData();
+            if (view.getPrice() == null) {
+                log.warn("SKU 缺少真实单价 skuId={}", cmd.getSkuId());
+                return false;
+            }
+            if (view.getSkuStatus() == null || view.getSkuStatus() != 1) {
+                log.warn("SKU 已下架不可售 skuId={} status={}", cmd.getSkuId(), view.getSkuStatus());
+                return false;
+            }
+            order.setAmount(view.getPrice().multiply(BigDecimal.valueOf(cmd.getQuantity())));
+            return true;
+        } catch (Exception e) {
+            log.error("调用商品服务计价异常 skuId={}", cmd.getSkuId(), e);
+            return false;
         }
     }
 

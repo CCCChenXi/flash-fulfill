@@ -6,15 +6,16 @@ import com.flash.fulfill.common.constant.MqTopics;
 import com.flash.fulfill.common.constant.OrderStatus;
 import com.flash.fulfill.common.dto.DeductStockResult;
 import com.flash.fulfill.common.dto.SeckillOrderCommand;
+import com.flash.fulfill.common.dto.SkuSellView;
 import com.flash.fulfill.common.exception.BizException;
 import com.flash.fulfill.order.entity.FlashOrder;
 import com.flash.fulfill.order.feign.InventoryClient;
+import com.flash.fulfill.order.feign.ProductClient;
 import com.flash.fulfill.order.mapper.OrderMapper;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -33,6 +34,7 @@ import static org.mockito.Mockito.when;
 class OrderServiceTest {
 
     private OrderMapper orderMapper;
+    private ProductClient productClient;
     private InventoryClient inventoryClient;
     private RocketMQTemplate rocketMQTemplate;
     private OrderService service;
@@ -40,10 +42,10 @@ class OrderServiceTest {
     @BeforeEach
     void setUp() {
         orderMapper = mock(OrderMapper.class);
+        productClient = mock(ProductClient.class);
         inventoryClient = mock(InventoryClient.class);
         rocketMQTemplate = mock(RocketMQTemplate.class);
-        service = new OrderService(orderMapper, inventoryClient, rocketMQTemplate);
-        ReflectionTestUtils.setField(service, "unitPrice", BigDecimal.valueOf(99.00));
+        service = new OrderService(orderMapper, productClient, inventoryClient, rocketMQTemplate);
     }
 
     private SeckillOrderCommand buildCommand() {
@@ -56,34 +58,46 @@ class OrderServiceTest {
         return cmd;
     }
 
+    private SkuSellView buildSellView(BigDecimal price, int skuStatus) {
+        SkuSellView view = new SkuSellView();
+        view.setSkuId(1001L);
+        view.setSpuId(2001L);
+        view.setSkuName("测试商品");
+        view.setPrice(price);
+        view.setSkuStatus(skuStatus);
+        view.setSpuStatus(1);
+        return view;
+    }
+
     @Test
     void createsOrderAndDispatchesFulfillmentOnDeductSuccess() {
         when(orderMapper.existsByRequestId("req-001")).thenReturn(false);
+        when(productClient.sellView(1001L)).thenReturn(Result.ok(buildSellView(new BigDecimal("199.00"), 1)));
         when(inventoryClient.deduct(any())).thenReturn(Result.ok(new DeductStockResult(true, 98)));
         when(rocketMQTemplate.syncSend(any(String.class), any(Object.class), anyLong()))
                 .thenReturn(null);
 
-        // 在调用时刻记录状态/金额(service 后续会复用同一对象改状态,captor 事后取到的是最终态)
         List<String> insertedStatus = new ArrayList<>();
-        List<BigDecimal> insertedAmount = new ArrayList<>();
         when(orderMapper.insert(any(FlashOrder.class))).thenAnswer(inv -> {
-            FlashOrder o = (FlashOrder) inv.getArgument(0);
-            insertedStatus.add(o.getStatus());
-            insertedAmount.add(o.getAmount());
+            insertedStatus.add(((FlashOrder) inv.getArgument(0)).getStatus());
             return 1;
         });
         List<String> updatedStatus = new ArrayList<>();
+        List<BigDecimal> updatedAmount = new ArrayList<>();
         when(orderMapper.updateById(any(FlashOrder.class))).thenAnswer(inv -> {
-            updatedStatus.add(((FlashOrder) inv.getArgument(0)).getStatus());
+            FlashOrder o = (FlashOrder) inv.getArgument(0);
+            updatedStatus.add(o.getStatus());
+            updatedAmount.add(o.getAmount());
             return 1;
         });
 
         service.handleOrderCreate(buildCommand());
 
         assertEquals(List.of(OrderStatus.INITIAL), insertedStatus);
-        assertEquals(0, new BigDecimal("198.00").compareTo(insertedAmount.get(0)));
         assertEquals(List.of(OrderStatus.CREATED), updatedStatus);
+        assertEquals(0, new BigDecimal("398.00").compareTo(updatedAmount.get(0)));
 
+        verify(productClient).sellView(1001L);
         verify(rocketMQTemplate).syncSend(
                 eq(MqTopics.ORDER_FULFILL + ":" + MqTopics.TAG_FULFILL),
                 any(Object.class),
@@ -91,8 +105,56 @@ class OrderServiceTest {
     }
 
     @Test
+    void marksOrderFailedWhenProductUnavailable() {
+        when(orderMapper.existsByRequestId("req-001")).thenReturn(false);
+        when(productClient.sellView(1001L)).thenReturn(Result.fail(ErrorCode.PRODUCT_NOT_FOUND));
+        when(orderMapper.insert(any(FlashOrder.class))).thenReturn(1);
+        when(orderMapper.updateById(any(FlashOrder.class))).thenReturn(1);
+
+        ArgumentCaptor<FlashOrder> captor = ArgumentCaptor.forClass(FlashOrder.class);
+        service.handleOrderCreate(buildCommand());
+
+        verify(orderMapper).insert(any(FlashOrder.class));
+        verify(orderMapper).updateById(captor.capture());
+        assertEquals(OrderStatus.FAILED, captor.getValue().getStatus());
+        verify(inventoryClient, never()).deduct(any());
+        verify(rocketMQTemplate, never()).syncSend(anyString(), any(Object.class), anyLong());
+    }
+
+    @Test
+    void marksOrderFailedWhenProductThrows() {
+        when(orderMapper.existsByRequestId("req-001")).thenReturn(false);
+        when(productClient.sellView(1001L)).thenThrow(new RuntimeException("product down"));
+        when(orderMapper.insert(any(FlashOrder.class))).thenReturn(1);
+        when(orderMapper.updateById(any(FlashOrder.class))).thenReturn(1);
+
+        ArgumentCaptor<FlashOrder> captor = ArgumentCaptor.forClass(FlashOrder.class);
+        service.handleOrderCreate(buildCommand());
+
+        verify(orderMapper).updateById(captor.capture());
+        assertEquals(OrderStatus.FAILED, captor.getValue().getStatus());
+        verify(inventoryClient, never()).deduct(any());
+    }
+
+    @Test
+    void marksOrderFailedWhenSkuOffShelf() {
+        when(orderMapper.existsByRequestId("req-001")).thenReturn(false);
+        when(productClient.sellView(1001L)).thenReturn(Result.ok(buildSellView(new BigDecimal("199.00"), 0)));
+        when(orderMapper.insert(any(FlashOrder.class))).thenReturn(1);
+        when(orderMapper.updateById(any(FlashOrder.class))).thenReturn(1);
+
+        service.handleOrderCreate(buildCommand());
+
+        verify(inventoryClient, never()).deduct(any());
+        ArgumentCaptor<FlashOrder> captor = ArgumentCaptor.forClass(FlashOrder.class);
+        verify(orderMapper).updateById(captor.capture());
+        assertEquals(OrderStatus.FAILED, captor.getValue().getStatus());
+    }
+
+    @Test
     void marksOrderFailedWhenDeductUnavailable() {
         when(orderMapper.existsByRequestId("req-001")).thenReturn(false);
+        when(productClient.sellView(1001L)).thenReturn(Result.ok(buildSellView(new BigDecimal("199.00"), 1)));
         when(inventoryClient.deduct(any())).thenReturn(Result.ok(new DeductStockResult(false, null)));
         when(orderMapper.insert(any(FlashOrder.class))).thenReturn(1);
 
@@ -115,12 +177,14 @@ class OrderServiceTest {
         service.handleOrderCreate(buildCommand());
 
         verify(orderMapper, never()).insert(any(FlashOrder.class));
+        verify(productClient, never()).sellView(anyLong());
         verify(inventoryClient, never()).deduct(any());
     }
 
     @Test
     void sendsFulfillmentEvenIfFeignCallFails() {
         when(orderMapper.existsByRequestId("req-001")).thenReturn(false);
+        when(productClient.sellView(1001L)).thenReturn(Result.ok(buildSellView(new BigDecimal("199.00"), 1)));
         when(inventoryClient.deduct(any())).thenThrow(new RuntimeException("inventory down"));
         when(orderMapper.insert(any(FlashOrder.class))).thenReturn(1);
 

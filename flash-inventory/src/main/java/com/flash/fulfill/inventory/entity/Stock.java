@@ -21,8 +21,6 @@ public class Stock {
 
     private Long skuId;
 
-    private String skuName;
-
     /** 可用库存 */
     private Integer available;
 

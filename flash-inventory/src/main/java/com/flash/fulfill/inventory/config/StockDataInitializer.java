@@ -31,20 +31,19 @@ public class StockDataInitializer implements ApplicationRunner {
         if (!seedEnabled) {
             return;
         }
-        seedIfAbsent(1001L, "限量款智能手机", 100);
-        seedIfAbsent(1002L, "联名限量跑鞋", 50);
+        seedIfAbsent(1001L, 100);
+        seedIfAbsent(1002L, 50);
     }
 
-    private void seedIfAbsent(Long skuId, String name, int available) {
+    private void seedIfAbsent(Long skuId, int available) {
         if (stockMapper.selectBySkuId(skuId) == null) {
             Stock stock = new Stock();
             stock.setSkuId(skuId);
-            stock.setSkuName(name);
             stock.setAvailable(available);
             stock.setLocked(0);
             stock.setVersion(0);
             stockMapper.insert(stock);
-            log.info("已初始化库存 skuId={} name={} available={}", skuId, name, available);
+            log.info("已初始化库存 skuId={} available={}", skuId, available);
         }
     }
 }

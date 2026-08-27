@@ -1,7 +1,6 @@
 CREATE TABLE IF NOT EXISTS stock (
     id         BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
     sku_id     BIGINT        NOT NULL COMMENT 'SKU ID',
-    sku_name   VARCHAR(64)   DEFAULT NULL COMMENT '商品名称',
     available  INT           NOT NULL DEFAULT 0 COMMENT '可用库存',
     locked     INT           NOT NULL DEFAULT 0 COMMENT '锁定库存',
     version    INT           NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',

@@ -12,7 +12,7 @@
     </update>
 
     <select id="selectBySkuId" resultType="com.flash.fulfill.inventory.entity.Stock">
-        SELECT id, sku_id, sku_name, available, locked, version, created_at, updated_at
+        SELECT id, sku_id, available, locked, version, created_at, updated_at
         FROM stock
         WHERE sku_id = #{skuId}
     </select>

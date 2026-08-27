@@ -156,11 +156,11 @@ class SeckillServiceTest {
     }
 
     @Test
-    void rejectsFeignExceptionAsNotFound() {
+    void rejectsTransportFailureAsSystemError() {
         when(productClient.sellView(1001L)).thenThrow(new RuntimeException("feign down"));
 
         BizException ex = assertThrows(BizException.class, () -> service.createFlashOrder(buildCommand()));
-        assertEquals(ErrorCode.PRODUCT_NOT_FOUND.getCode(), ex.getCode());
+        assertEquals(ErrorCode.SYSTEM_ERROR.getCode(), ex.getCode());
         verify(stockPreDeductor, never()).tryPreDeduct(anyLong(), any(Integer.class));
     }
 

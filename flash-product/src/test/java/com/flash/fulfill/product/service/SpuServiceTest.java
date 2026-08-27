@@ -11,11 +11,15 @@ import com.flash.fulfill.product.mapper.SpuMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -90,15 +94,24 @@ class SpuServiceTest {
         cmd.setDescription("新描述");
         cmd.setMainImage("https://img.flashfulfill.com/new.png");
 
-        SpuView view = service.update(100L, cmd);
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            SpuView view = service.update(100L, cmd);
 
-        verify(spuMapper).updateById(any(Spu.class));
-        verify(cacheService).evictSpu(100L);
-        assertEquals("新名称", view.getName());
-        assertEquals(11L, view.getCategoryId());
-        assertEquals(21L, view.getBrandId());
-        assertEquals("新描述", view.getDescription());
-        assertEquals("https://img.flashfulfill.com/new.png", view.getMainImage());
+            verify(spuMapper).updateById(any(Spu.class));
+            verify(cacheService, never()).evictSpu(anyLong());
+
+            triggerAfterCommit();
+            verify(cacheService).evictSpu(100L);
+
+            assertEquals("新名称", view.getName());
+            assertEquals(11L, view.getCategoryId());
+            assertEquals(21L, view.getBrandId());
+            assertEquals("新描述", view.getDescription());
+            assertEquals("https://img.flashfulfill.com/new.png", view.getMainImage());
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test
@@ -118,10 +131,29 @@ class SpuServiceTest {
         spu.setStatus(1);
         when(spuMapper.selectById4View(100L)).thenReturn(spu);
 
-        service.onShelf(100L);
-        verify(cacheService).evictSpu(100L);
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.onShelf(100L);
+            verify(cacheService, never()).evictSpu(anyLong());
 
-        service.offShelf(100L);
-        verify(cacheService, times(2)).evictSpu(100L);
+            triggerAfterCommit();
+            verify(cacheService).evictSpu(100L);
+
+            TransactionSynchronizationManager.clearSynchronization();
+            TransactionSynchronizationManager.initSynchronization();
+
+            service.offShelf(100L);
+            verify(cacheService, times(1)).evictSpu(100L);
+
+            triggerAfterCommit();
+            verify(cacheService, times(2)).evictSpu(100L);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    private void triggerAfterCommit() {
+        TransactionSynchronizationManager.getSynchronizations()
+                .forEach(TransactionSynchronization::afterCommit);
     }
 }

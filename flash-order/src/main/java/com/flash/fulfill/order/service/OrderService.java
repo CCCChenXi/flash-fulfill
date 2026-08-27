@@ -72,7 +72,6 @@ public class OrderService {
         if (!resolvePrice(order, cmd)) {
             order.setStatus(OrderStatus.FAILED);
             orderMapper.insert(order);
-            orderMapper.updateById(order);
             log.warn("商品计价失败,订单标记 FAILED orderNo={} requestId={}", order.getOrderNo(), cmd.getRequestId());
             return;
         }

@@ -12,13 +12,17 @@ import com.flash.fulfill.product.mapper.SkuMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -78,22 +82,30 @@ class SkuServiceTest {
             return 1;
         });
 
-        SkuView view = service.create(buildCreateCommand());
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            SkuView view = service.create(buildCreateCommand());
 
-        ArgumentCaptor<Sku> captor = ArgumentCaptor.forClass(Sku.class);
-        verify(skuMapper).insert(captor.capture());
-        Sku saved = captor.getValue();
-        assertEquals(100L, saved.getSpuId());
-        assertEquals("SKU001", saved.getSkuCode());
-        assertEquals("华为 Mate 60 Pro", saved.getName());
-        assertEquals(new BigDecimal("5999.00"), saved.getPrice());
-        assertEquals("{\"color\":\"黑\",\"storage\":\"256G\"}", saved.getSpecs());
-        assertEquals(1, saved.getStatus());
+            ArgumentCaptor<Sku> captor = ArgumentCaptor.forClass(Sku.class);
+            verify(skuMapper).insert(captor.capture());
+            Sku saved = captor.getValue();
+            assertEquals(100L, saved.getSpuId());
+            assertEquals("SKU001", saved.getSkuCode());
+            assertEquals("华为 Mate 60 Pro", saved.getName());
+            assertEquals(new BigDecimal("5999.00"), saved.getPrice());
+            assertEquals("{\"color\":\"黑\",\"storage\":\"256G\"}", saved.getSpecs());
+            assertEquals(1, saved.getStatus());
 
-        assertEquals(300L, view.getId());
-        assertEquals("SKU001", view.getSkuCode());
-        assertEquals(1, view.getStatus());
-        verify(cacheService).evictSku(300L);
+            assertEquals(300L, view.getId());
+            assertEquals("SKU001", view.getSkuCode());
+            assertEquals(1, view.getStatus());
+            verify(cacheService, never()).evictSku(anyLong());
+
+            triggerAfterCommit();
+            verify(cacheService).evictSku(300L);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test
@@ -133,12 +145,31 @@ class SkuServiceTest {
         sku.setStatus(1);
         when(skuMapper.selectById4View(200L)).thenReturn(sku);
 
-        service.setStatus(200L, 0);
-        verify(cacheService).evictSku(200L);
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.setStatus(200L, 0);
+            verify(cacheService, never()).evictSku(anyLong());
 
-        SkuUpdateCommand cmd = new SkuUpdateCommand();
-        cmd.setName("新名称");
-        service.update(200L, cmd);
-        verify(cacheService, times(2)).evictSku(200L);
+            triggerAfterCommit();
+            verify(cacheService).evictSku(200L);
+
+            TransactionSynchronizationManager.clearSynchronization();
+            TransactionSynchronizationManager.initSynchronization();
+
+            SkuUpdateCommand cmd = new SkuUpdateCommand();
+            cmd.setName("新名称");
+            service.update(200L, cmd);
+            verify(cacheService, times(1)).evictSku(200L);
+
+            triggerAfterCommit();
+            verify(cacheService, times(2)).evictSku(200L);
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    private void triggerAfterCommit() {
+        TransactionSynchronizationManager.getSynchronizations()
+                .forEach(TransactionSynchronization::afterCommit);
     }
 }

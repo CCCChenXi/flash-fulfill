@@ -12,6 +12,8 @@ import com.flash.fulfill.product.mapper.SkuMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * SKU 服务:新建 / 更新 / 上下架 / 出售视图。
@@ -46,7 +48,7 @@ public class SkuService {
         sku.setSpecs(cmd.getSpecs());
         sku.setStatus(STATUS_ON_SHELF);
         skuMapper.insert(sku);
-        cacheService.evictSku(sku.getId());
+        evictAfterCommit(() -> cacheService.evictSku(sku.getId()));
         log.info("新建 SKU 成功 skuId={}", sku.getId());
         return toView(sku);
     }
@@ -71,7 +73,7 @@ public class SkuService {
             sku.setStatus(cmd.getStatus());
         }
         skuMapper.updateById(sku);
-        cacheService.evictSku(id);
+        evictAfterCommit(() -> cacheService.evictSku(id));
         log.info("更新 SKU 成功 skuId={}", id);
         return toView(sku);
     }
@@ -84,7 +86,7 @@ public class SkuService {
         Sku sku = requireSku(id);
         sku.setStatus(status);
         skuMapper.updateById(sku);
-        cacheService.evictSku(id);
+        evictAfterCommit(() -> cacheService.evictSku(id));
         log.info("SKU 状态变更成功 skuId={} status={}", id, status);
         return toView(sku);
     }
@@ -104,6 +106,20 @@ public class SkuService {
             throw new BizException(ErrorCode.PRODUCT_NOT_FOUND);
         }
         return sku;
+    }
+
+    /** 事务提交后再驱逐缓存,避免并发读在提交前回填旧数据;非事务环境下立即驱逐。 */
+    private void evictAfterCommit(Runnable evict) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    evict.run();
+                }
+            });
+        } else {
+            evict.run();
+        }
     }
 
     private SkuView toView(Sku sku) {

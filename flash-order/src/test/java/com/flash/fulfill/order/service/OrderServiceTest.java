@@ -109,14 +109,13 @@ class OrderServiceTest {
         when(orderMapper.existsByRequestId("req-001")).thenReturn(false);
         when(productClient.sellView(1001L)).thenReturn(Result.fail(ErrorCode.PRODUCT_NOT_FOUND));
         when(orderMapper.insert(any(FlashOrder.class))).thenReturn(1);
-        when(orderMapper.updateById(any(FlashOrder.class))).thenReturn(1);
 
         ArgumentCaptor<FlashOrder> captor = ArgumentCaptor.forClass(FlashOrder.class);
         service.handleOrderCreate(buildCommand());
 
-        verify(orderMapper).insert(any(FlashOrder.class));
-        verify(orderMapper).updateById(captor.capture());
+        verify(orderMapper).insert(captor.capture());
         assertEquals(OrderStatus.FAILED, captor.getValue().getStatus());
+        verify(orderMapper, never()).updateById(any(FlashOrder.class));
         verify(inventoryClient, never()).deduct(any());
         verify(rocketMQTemplate, never()).syncSend(anyString(), any(Object.class), anyLong());
     }
@@ -126,13 +125,13 @@ class OrderServiceTest {
         when(orderMapper.existsByRequestId("req-001")).thenReturn(false);
         when(productClient.sellView(1001L)).thenThrow(new RuntimeException("product down"));
         when(orderMapper.insert(any(FlashOrder.class))).thenReturn(1);
-        when(orderMapper.updateById(any(FlashOrder.class))).thenReturn(1);
 
         ArgumentCaptor<FlashOrder> captor = ArgumentCaptor.forClass(FlashOrder.class);
         service.handleOrderCreate(buildCommand());
 
-        verify(orderMapper).updateById(captor.capture());
+        verify(orderMapper).insert(captor.capture());
         assertEquals(OrderStatus.FAILED, captor.getValue().getStatus());
+        verify(orderMapper, never()).updateById(any(FlashOrder.class));
         verify(inventoryClient, never()).deduct(any());
     }
 
@@ -141,14 +140,12 @@ class OrderServiceTest {
         when(orderMapper.existsByRequestId("req-001")).thenReturn(false);
         when(productClient.sellView(1001L)).thenReturn(Result.ok(buildSellView(new BigDecimal("199.00"), 0)));
         when(orderMapper.insert(any(FlashOrder.class))).thenReturn(1);
-        when(orderMapper.updateById(any(FlashOrder.class))).thenReturn(1);
 
         service.handleOrderCreate(buildCommand());
 
         verify(inventoryClient, never()).deduct(any());
-        ArgumentCaptor<FlashOrder> captor = ArgumentCaptor.forClass(FlashOrder.class);
-        verify(orderMapper).updateById(captor.capture());
-        assertEquals(OrderStatus.FAILED, captor.getValue().getStatus());
+        verify(orderMapper).insert(any(FlashOrder.class));
+        verify(orderMapper, never()).updateById(any(FlashOrder.class));
     }
 
     @Test

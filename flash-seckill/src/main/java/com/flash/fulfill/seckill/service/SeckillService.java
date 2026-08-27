@@ -100,14 +100,16 @@ public class SeckillService {
         } catch (BizException e) {
             throw e;
         } catch (Exception e) {
-            log.error("校验商品可买失败 skuId={}", cmd.getSkuId(), e);
-            throw new BizException(ErrorCode.PRODUCT_NOT_FOUND);
+            log.error("调用商品服务校验可买异常 skuId={}", cmd.getSkuId(), e);
+            throw new BizException(ErrorCode.SYSTEM_ERROR);
         }
 
         if (view.getSkuStatus() == null || view.getSpuStatus() == null) {
             throw new BizException(ErrorCode.PRODUCT_NOT_FOUND);
         }
         if (view.getSkuStatus() != 1 || view.getSpuStatus() != 1) {
+            log.warn("商品已下架不可售 skuId={} skuStatus={} spuStatus={}",
+                    cmd.getSkuId(), view.getSkuStatus(), view.getSpuStatus());
             throw new BizException(ErrorCode.PRODUCT_OFF_SHELF);
         }
     }

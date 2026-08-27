@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.flash.fulfill.product.mapper.SkuMapper">
+
+    <select id="selectBySkuCode" resultType="com.flash.fulfill.product.entity.Sku">
+        SELECT id, spu_id, sku_code, name, price, image, specs, status, create_time, update_time
+        FROM sku
+        WHERE sku_code = #{skuCode}
+    </select>
+
+    <select id="selectById4View" resultType="com.flash.fulfill.product.entity.Sku">
+        SELECT id, spu_id, sku_code, name, price, image, specs, status, create_time, update_time
+        FROM sku
+        WHERE id = #{id}
+    </select>
+</mapper>

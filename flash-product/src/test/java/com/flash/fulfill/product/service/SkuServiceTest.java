@@ -116,4 +116,12 @@ class SkuServiceTest {
 
         assertEquals(ErrorCode.PRODUCT_NOT_FOUND.getCode(), ex.getCode());
     }
+
+    @Test
+    void setStatusRejectsInvalidValue() {
+        BizException ex = assertThrows(BizException.class, () -> service.setStatus(200L, 2));
+
+        assertEquals(ErrorCode.INVALID_PARAM.getCode(), ex.getCode());
+        assertEquals("status 只能为 0 或 1", ex.getMessage());
+    }
 }

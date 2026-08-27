@@ -3,6 +3,7 @@ package com.flash.fulfill.product.controller;
 import com.flash.fulfill.common.api.Result;
 import com.flash.fulfill.common.dto.SkuSellView;
 import com.flash.fulfill.product.dto.SkuCreateCommand;
+import com.flash.fulfill.product.dto.SkuStatusCommand;
 import com.flash.fulfill.product.dto.SkuUpdateCommand;
 import com.flash.fulfill.product.dto.SkuView;
 import com.flash.fulfill.product.service.SkuService;
@@ -41,9 +42,9 @@ public class SkuController {
     }
 
     /** 设置 SKU 状态上 / 下架 */
-    @PutMapping("/{id}/status/{status}")
-    public Result<SkuView> setStatus(@PathVariable("id") Long id, @PathVariable("status") int status) {
-        return Result.ok(skuService.setStatus(id, status));
+    @PutMapping("/{id}/status")
+    public Result<SkuView> setStatus(@PathVariable("id") Long id, @RequestBody SkuStatusCommand cmd) {
+        return Result.ok(skuService.setStatus(id, cmd.getStatus()));
     }
 
     /** 查询 SKU 出售视图(下游 order / seckill 跨服务消费) */

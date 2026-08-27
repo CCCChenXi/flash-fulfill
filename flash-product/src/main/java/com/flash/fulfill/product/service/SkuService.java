@@ -77,6 +77,9 @@ public class SkuService {
 
     @Transactional
     public SkuView setStatus(Long id, int status) {
+        if (status != STATUS_ON_SHELF && status != STATUS_OFF_SHELF) {
+            throw new BizException(ErrorCode.INVALID_PARAM, "status 只能为 0 或 1");
+        }
         Sku sku = requireSku(id);
         sku.setStatus(status);
         skuMapper.updateById(sku);

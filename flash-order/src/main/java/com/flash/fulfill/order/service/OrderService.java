@@ -68,15 +68,17 @@ public class OrderService {
         order.setSkuId(cmd.getSkuId());
         order.setActivityId(cmd.getActivityId());
         order.setQuantity(cmd.getQuantity());
-        order.setStatus(OrderStatus.INITIAL);
-        orderMapper.insert(order);
 
         if (!resolvePrice(order, cmd)) {
             order.setStatus(OrderStatus.FAILED);
+            orderMapper.insert(order);
             orderMapper.updateById(order);
             log.warn("商品计价失败,订单标记 FAILED orderNo={} requestId={}", order.getOrderNo(), cmd.getRequestId());
             return;
         }
+
+        order.setStatus(OrderStatus.INITIAL);
+        orderMapper.insert(order);
 
         boolean deducted = deductStock(order, cmd);
         if (deducted) {

@@ -38,6 +38,10 @@ spring:
           uri: lb://flash-user
           predicates:
             - Path=/api/user/**
+        - id: flash-product-route
+          uri: lb://flash-product
+          predicates:
+            - Path=/api/product/**
     sentinel:
       # Sentinel 控制台地址(可选,无控制台不影响启动)
       transport:

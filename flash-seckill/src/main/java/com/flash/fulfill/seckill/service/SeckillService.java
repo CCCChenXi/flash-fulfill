@@ -6,8 +6,10 @@ import com.flash.fulfill.common.constant.MqTopics;
 import com.flash.fulfill.common.dto.FlashOrderResponse;
 import com.flash.fulfill.common.dto.SeckillOrderCommand;
 import com.flash.fulfill.common.exception.BizException;
+import com.flash.fulfill.common.dto.SkuSellView;
 import com.flash.fulfill.common.util.IdGenerator;
 import com.flash.fulfill.seckill.deductor.StockPreDeductor;
+import com.flash.fulfill.seckill.feign.ProductClient;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
@@ -30,17 +32,21 @@ public class SeckillService {
 
     private final StockPreDeductor stockPreDeductor;
     private final RocketMQTemplate rocketMQTemplate;
+    private final ProductClient productClient;
 
     @Value("${seckill.prededuct.enabled:true}")
     private boolean predeductEnabled;
 
-    public SeckillService(StockPreDeductor stockPreDeductor, RocketMQTemplate rocketMQTemplate) {
+    public SeckillService(StockPreDeductor stockPreDeductor, RocketMQTemplate rocketMQTemplate,
+                          ProductClient productClient) {
         this.stockPreDeductor = stockPreDeductor;
         this.rocketMQTemplate = rocketMQTemplate;
+        this.productClient = productClient;
     }
 
     public Result<FlashOrderResponse> createFlashOrder(SeckillOrderCommand cmd) {
         validate(cmd);
+        validateSellable(cmd);
 
         if (predeductEnabled && !stockPreDeductor.tryPreDeduct(cmd.getSkuId(), cmd.getQuantity())) {
             throw new BizException(ErrorCode.STOCK_NOT_ENOUGH);
@@ -77,6 +83,32 @@ public class SeckillService {
         if (cmd == null || cmd.getUserId() == null || cmd.getSkuId() == null
                 || cmd.getQuantity() == null || cmd.getQuantity() <= 0) {
             throw new BizException(ErrorCode.INVALID_PARAM, "userId/skuId/quantity 为必填且 quantity 需大于 0");
+        }
+    }
+
+    /**
+     * 校验商品 SPU/SKU 双上架状态,于预扣库存前执行。
+     */
+    private void validateSellable(SeckillOrderCommand cmd) {
+        SkuSellView view;
+        try {
+            Result<SkuSellView> result = productClient.sellView(cmd.getSkuId());
+            if (result == null || !result.isSuccess() || result.getData() == null) {
+                throw new BizException(ErrorCode.PRODUCT_NOT_FOUND);
+            }
+            view = result.getData();
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("校验商品可买失败 skuId={}", cmd.getSkuId(), e);
+            throw new BizException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+
+        if (view.getSkuStatus() == null || view.getSpuStatus() == null) {
+            throw new BizException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+        if (view.getSkuStatus() != 1 || view.getSpuStatus() != 1) {
+            throw new BizException(ErrorCode.PRODUCT_OFF_SHELF);
         }
     }
 }

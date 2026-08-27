@@ -3,13 +3,12 @@ package com.flash.fulfill.product.service;
 import com.flash.fulfill.common.api.ErrorCode;
 import com.flash.fulfill.common.dto.SkuSellView;
 import com.flash.fulfill.common.exception.BizException;
+import com.flash.fulfill.product.cache.SkuCacheService;
 import com.flash.fulfill.product.dto.SkuCreateCommand;
 import com.flash.fulfill.product.dto.SkuUpdateCommand;
 import com.flash.fulfill.product.dto.SkuView;
 import com.flash.fulfill.product.entity.Sku;
-import com.flash.fulfill.product.entity.Spu;
 import com.flash.fulfill.product.mapper.SkuMapper;
-import com.flash.fulfill.product.mapper.SpuMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,11 +24,11 @@ public class SkuService {
     public static final int STATUS_OFF_SHELF = 0;
 
     private final SkuMapper skuMapper;
-    private final SpuMapper spuMapper;
+    private final SkuCacheService cacheService;
 
-    public SkuService(SkuMapper skuMapper, SpuMapper spuMapper) {
+    public SkuService(SkuMapper skuMapper, SkuCacheService cacheService) {
         this.skuMapper = skuMapper;
-        this.spuMapper = spuMapper;
+        this.cacheService = cacheService;
     }
 
     /** 新建 SKU,默认上架;sku_code 唯一。 */
@@ -47,6 +46,7 @@ public class SkuService {
         sku.setSpecs(cmd.getSpecs());
         sku.setStatus(STATUS_ON_SHELF);
         skuMapper.insert(sku);
+        cacheService.evictSku(sku.getId());
         log.info("新建 SKU 成功 skuId={}", sku.getId());
         return toView(sku);
     }
@@ -71,6 +71,7 @@ public class SkuService {
             sku.setStatus(cmd.getStatus());
         }
         skuMapper.updateById(sku);
+        cacheService.evictSku(id);
         log.info("更新 SKU 成功 skuId={}", id);
         return toView(sku);
     }
@@ -83,22 +84,14 @@ public class SkuService {
         Sku sku = requireSku(id);
         sku.setStatus(status);
         skuMapper.updateById(sku);
+        cacheService.evictSku(id);
         log.info("SKU 状态变更成功 skuId={} status={}", id, status);
         return toView(sku);
     }
 
     /** 出售视图:读取父 SPU 的 status 一并返回。 */
     public SkuSellView getSellView(Long skuId) {
-        Sku sku = requireSku(skuId);
-        Spu spu = spuMapper.selectById4View(sku.getSpuId());
-        SkuSellView v = new SkuSellView();
-        v.setSkuId(sku.getId());
-        v.setSpuId(sku.getSpuId());
-        v.setSkuName(sku.getName());
-        v.setPrice(sku.getPrice());
-        v.setSkuStatus(sku.getStatus());
-        v.setSpuStatus(spu == null ? null : spu.getStatus());
-        return v;
+        return cacheService.getSellView(skuId);
     }
 
     public SkuView get(Long id) {

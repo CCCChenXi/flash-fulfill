@@ -13,4 +13,10 @@
         FROM sku
         WHERE id = #{id}
     </select>
+
+    <select id="selectIdsBySpuId" resultType="java.lang.Long">
+        SELECT id
+        FROM sku
+        WHERE spu_id = #{spuId}
+    </select>
 </mapper>

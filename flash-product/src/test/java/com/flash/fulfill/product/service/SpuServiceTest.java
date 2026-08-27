@@ -2,6 +2,7 @@ package com.flash.fulfill.product.service;
 
 import com.flash.fulfill.common.api.ErrorCode;
 import com.flash.fulfill.common.exception.BizException;
+import com.flash.fulfill.product.cache.SkuCacheService;
 import com.flash.fulfill.product.dto.SpuCreateCommand;
 import com.flash.fulfill.product.dto.SpuUpdateCommand;
 import com.flash.fulfill.product.dto.SpuView;
@@ -15,18 +16,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SpuServiceTest {
 
     private SpuMapper spuMapper;
+    private SkuCacheService cacheService;
     private SpuService service;
 
     @BeforeEach
     void setUp() {
         spuMapper = mock(SpuMapper.class);
-        service = new SpuService(spuMapper);
+        cacheService = mock(SkuCacheService.class);
+        service = new SpuService(spuMapper, cacheService);
     }
 
     private SpuCreateCommand buildCreateCommand() {
@@ -89,6 +93,7 @@ class SpuServiceTest {
         SpuView view = service.update(100L, cmd);
 
         verify(spuMapper).updateById(any(Spu.class));
+        verify(cacheService).evictSpu(100L);
         assertEquals("新名称", view.getName());
         assertEquals(11L, view.getCategoryId());
         assertEquals(21L, view.getBrandId());
@@ -103,5 +108,20 @@ class SpuServiceTest {
         BizException ex = assertThrows(BizException.class, () -> service.get(9999L));
 
         assertEquals(ErrorCode.PRODUCT_NOT_FOUND.getCode(), ex.getCode());
+    }
+
+    @Test
+    void onOffShelfEvictChildCache() {
+        Spu spu = new Spu();
+        spu.setId(100L);
+        spu.setName("华为 Mate 60 Pro");
+        spu.setStatus(1);
+        when(spuMapper.selectById4View(100L)).thenReturn(spu);
+
+        service.onShelf(100L);
+        verify(cacheService).evictSpu(100L);
+
+        service.offShelf(100L);
+        verify(cacheService, times(2)).evictSpu(100L);
     }
 }

@@ -3,12 +3,12 @@ package com.flash.fulfill.product.service;
 import com.flash.fulfill.common.api.ErrorCode;
 import com.flash.fulfill.common.dto.SkuSellView;
 import com.flash.fulfill.common.exception.BizException;
+import com.flash.fulfill.product.cache.SkuCacheService;
 import com.flash.fulfill.product.dto.SkuCreateCommand;
+import com.flash.fulfill.product.dto.SkuUpdateCommand;
 import com.flash.fulfill.product.dto.SkuView;
 import com.flash.fulfill.product.entity.Sku;
-import com.flash.fulfill.product.entity.Spu;
 import com.flash.fulfill.product.mapper.SkuMapper;
-import com.flash.fulfill.product.mapper.SpuMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -19,20 +19,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SkuServiceTest {
 
     private SkuMapper skuMapper;
-    private SpuMapper spuMapper;
+    private SkuCacheService cacheService;
     private SkuService service;
 
     @BeforeEach
     void setUp() {
         skuMapper = mock(SkuMapper.class);
-        spuMapper = mock(SpuMapper.class);
-        service = new SkuService(skuMapper, spuMapper);
+        cacheService = mock(SkuCacheService.class);
+        service = new SkuService(skuMapper, cacheService);
     }
 
     private SkuCreateCommand buildCreateCommand() {
@@ -47,29 +48,25 @@ class SkuServiceTest {
     }
 
     @Test
-    void getSellViewMergesParentStatus() {
-        Sku sku = new Sku();
-        sku.setId(200L);
-        sku.setSpuId(100L);
-        sku.setSkuCode("SKU001");
-        sku.setName("华为 Mate 60 Pro");
-        sku.setPrice(new BigDecimal("5999.00"));
-        sku.setStatus(1);
-        when(skuMapper.selectById4View(200L)).thenReturn(sku);
+    void getSellViewDelegatesToCache() {
+        SkuSellView view = new SkuSellView();
+        view.setSkuId(200L);
+        view.setSpuId(100L);
+        view.setSkuName("华为 Mate 60 Pro");
+        view.setPrice(new BigDecimal("5999.00"));
+        view.setSkuStatus(1);
+        view.setSpuStatus(0);
+        when(cacheService.getSellView(200L)).thenReturn(view);
 
-        Spu spu = new Spu();
-        spu.setId(100L);
-        spu.setStatus(0);
-        when(spuMapper.selectById4View(100L)).thenReturn(spu);
+        SkuSellView result = service.getSellView(200L);
 
-        SkuSellView view = service.getSellView(200L);
-
-        assertEquals(200L, view.getSkuId());
-        assertEquals(100L, view.getSpuId());
-        assertEquals("华为 Mate 60 Pro", view.getSkuName());
-        assertEquals(new BigDecimal("5999.00"), view.getPrice());
-        assertEquals(1, view.getSkuStatus());
-        assertEquals(0, view.getSpuStatus());
+        assertEquals(200L, result.getSkuId());
+        assertEquals(100L, result.getSpuId());
+        assertEquals("华为 Mate 60 Pro", result.getSkuName());
+        assertEquals(new BigDecimal("5999.00"), result.getPrice());
+        assertEquals(1, result.getSkuStatus());
+        assertEquals(0, result.getSpuStatus());
+        verify(cacheService).getSellView(200L);
     }
 
     @Test
@@ -96,6 +93,7 @@ class SkuServiceTest {
         assertEquals(300L, view.getId());
         assertEquals("SKU001", view.getSkuCode());
         assertEquals(1, view.getStatus());
+        verify(cacheService).evictSku(300L);
     }
 
     @Test
@@ -123,5 +121,24 @@ class SkuServiceTest {
 
         assertEquals(ErrorCode.INVALID_PARAM.getCode(), ex.getCode());
         assertEquals("status 只能为 0 或 1", ex.getMessage());
+    }
+
+    @Test
+    void setStatusAndUpdateEvictCache() {
+        Sku sku = new Sku();
+        sku.setId(200L);
+        sku.setSpuId(100L);
+        sku.setName("华为 Mate 60 Pro");
+        sku.setPrice(new BigDecimal("5999.00"));
+        sku.setStatus(1);
+        when(skuMapper.selectById4View(200L)).thenReturn(sku);
+
+        service.setStatus(200L, 0);
+        verify(cacheService).evictSku(200L);
+
+        SkuUpdateCommand cmd = new SkuUpdateCommand();
+        cmd.setName("新名称");
+        service.update(200L, cmd);
+        verify(cacheService, times(2)).evictSku(200L);
     }
 }

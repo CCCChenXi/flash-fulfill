@@ -2,6 +2,7 @@ package com.flash.fulfill.product.service;
 
 import com.flash.fulfill.common.api.ErrorCode;
 import com.flash.fulfill.common.exception.BizException;
+import com.flash.fulfill.product.cache.SkuCacheService;
 import com.flash.fulfill.product.dto.SpuCreateCommand;
 import com.flash.fulfill.product.dto.SpuUpdateCommand;
 import com.flash.fulfill.product.dto.SpuView;
@@ -22,9 +23,11 @@ public class SpuService {
     public static final int STATUS_OFF_SHELF = 0;
 
     private final SpuMapper spuMapper;
+    private final SkuCacheService cacheService;
 
-    public SpuService(SpuMapper spuMapper) {
+    public SpuService(SpuMapper spuMapper, SkuCacheService cacheService) {
         this.spuMapper = spuMapper;
+        this.cacheService = cacheService;
     }
 
     /** 新建 SPU,默认上架。 */
@@ -62,6 +65,7 @@ public class SpuService {
             spu.setMainImage(cmd.getMainImage());
         }
         spuMapper.updateById(spu);
+        cacheService.evictSpu(id);
         log.info("更新 SPU 成功 spuId={}", id);
         return toView(spu);
     }
@@ -87,6 +91,7 @@ public class SpuService {
         Spu spu = requireSpu(id);
         spu.setStatus(status);
         spuMapper.updateById(spu);
+        cacheService.evictSpu(id);
         log.info("SPU 状态变更成功 spuId={} status={}", id, status);
         return toView(spu);
     }

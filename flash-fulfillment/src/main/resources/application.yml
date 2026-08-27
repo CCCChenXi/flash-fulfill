@@ -1,0 +1,46 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: flash-fulfillment
+  threads:
+    virtual:
+      enabled: true
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 172.25.80.175:8848
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/flash_fulfillment_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: cx348452
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: always
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.flash.fulfill.fulfillment.entity
+  configuration:
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    banner: false
+
+rocketmq:
+  name-server: 172.25.80.175:9876
+  producer:
+    group: flash-fulfillment-producer
+    send-message-timeout: 3000
+
+fulfillment:
+  warehouses:
+    - WH-SH
+    - WH-BJ
+    - WH-GZ
+
+logging:
+  level:
+    com.flash.fulfill: INFO
+    com.flash.fulfill.fulfillment.mapper: debug

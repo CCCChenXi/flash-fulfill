@@ -1,0 +1,70 @@
+services:
+  nacos:
+    image: nacos/nacos-server:v2.3.2
+    container_name: flash-nacos
+    environment:
+      - MODE=standalone
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: flash-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      TZ: Asia/Shanghai
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./deploy/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: flash-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:5.1.4
+    container_name: flash-rmq-namesrv
+    ports:
+      - "9876:9876"
+    command: sh mqnamesrv
+    restart: unless-stopped
+
+  rocketmq-broker:
+    image: apache/rocketmq:5.1.4
+    container_name: flash-rmq-broker
+    depends_on:
+      - rocketmq-namesrv
+    environment:
+      - AUTO_CREATE_TOPIC_ENABLE=true
+    volumes:
+      - ./deploy/rocketmq/broker.conf:/home/rocketmq/rocketmq-5.1.4/conf/broker.conf:ro
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+    command: sh mqbroker -c /home/rocketmq/rocketmq-5.1.4/conf/broker.conf
+    restart: unless-stopped
+
+  # Seata 服务端(占位):骨架阶段默认不启动,后续接入 Seata 分布式事务时启用
+  # 启用: docker compose --profile seata up -d seata-server
+  seata-server:
+    image: seataio/seata-server:2.0.0
+    container_name: flash-seata
+    ports:
+      - "8091:8091"
+      - "7091:7091"
+    environment:
+      - SEATA_IP=127.0.0.1
+    restart: unless-stopped
+    profiles: [ "seata" ]
+
+volumes:
+  mysql-data:

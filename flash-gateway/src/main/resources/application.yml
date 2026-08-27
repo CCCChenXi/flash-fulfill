@@ -1,0 +1,75 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: flash-gateway
+  threads:
+    virtual:
+      enabled: true
+  cloud:
+    nacos:
+      discovery:
+        # 默认注册到本机 Nacos;若未启动不会阻断程序启动( fail-fast=false )
+        server-addr: 172.25.80.175:8848
+    gateway:
+      discovery:
+        locator:
+          # 自动路由: 亦支持 /flash-order/** 直接访问
+          enabled: true
+      routes:
+        - id: flash-seckill-route
+          uri: lb://flash-seckill
+          predicates:
+            - Path=/api/seckill/**
+        - id: flash-order-route
+          uri: lb://flash-order
+          predicates:
+            - Path=/api/order/**
+        - id: flash-inventory-route
+          uri: lb://flash-inventory
+          predicates:
+            - Path=/api/inventory/**
+        - id: flash-fulfillment-route
+          uri: lb://flash-fulfillment
+          predicates:
+            - Path=/api/fulfillment/**
+        - id: flash-user-route
+          uri: lb://flash-user
+          predicates:
+            - Path=/api/user/**
+    sentinel:
+      # Sentinel 控制台地址(可选,无控制台不影响启动)
+      transport:
+        dashboard: 127.0.0.1:8858
+  data:
+    redis:
+      host: 172.25.80.175
+      port: 6379
+
+gateway:
+  auth:
+    # 演示用固定 token,生产环境替换为 JWT 签发/校验
+    demo-token: demo-token-001
+  rate-limit:
+    # Sentinel 网关限流(SentinelGatewayConfig 加载基线规则,Nacos 下发可覆盖)
+    api-qps: 5000   # 全局 API 维度 QPS 上限(兜底默认)
+    ip-qps: 20      # 每可信客户端 IP QPS(兜底默认)
+    user-qps: 100   # 每登录用户 QPS(兜底默认,匿名请求共享一个伪用户桶)
+    # 可信代理 IP 列表,仅当直连对端命中时才信任 X-Forwarded-For/X-Real-IP;留空则只用 remote address(防伪造)
+    trusted-proxies: []
+  sentinel-rules:
+    nacos:
+      enabled: true                 # false 时仅用代码兜底规则
+      server-addr: 172.25.80.175:8848
+      group-id: SENTINEL_GROUP
+      flow-data-id: flash-gateway-flow-rules
+
+# JWT 配置:HS256 对称密钥(>= 32 字节),生产建议通过环境变量注入
+jwt:
+  secret: ${JWT_SECRET:flash-fulfill-demo-secret-0123456789abcdef}
+  expire-seconds: 86400
+
+logging:
+  level:
+    com.flash.fulfill: INFO

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.flash.fulfill.order.mapper.OrderMapper">
+
+    <select id="selectByOrderNo" resultType="com.flash.fulfill.order.entity.FlashOrder">
+        SELECT id, order_no, user_id, sku_id, activity_id, quantity, amount, status,
+               request_id, created_at, updated_at
+        FROM flash_order
+        WHERE order_no = #{orderNo}
+    </select>
+
+    <select id="selectByRequestId" resultType="com.flash.fulfill.order.entity.FlashOrder">
+        SELECT id, order_no, user_id, sku_id, activity_id, quantity, amount, status,
+               request_id, created_at, updated_at
+        FROM flash_order
+        WHERE request_id = #{requestId}
+    </select>
+
+    <select id="existsByRequestId" resultType="boolean">
+        SELECT COUNT(*) &gt; 0
+        FROM flash_order
+        WHERE request_id = #{requestId}
+    </select>
+</mapper>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.flash.fulfill.inventory.mapper.StockMapper">
+
+    <!-- 防超卖核心:条件更新,库存不足时影响 0 行 -->
+    <update id="deductStock">
+        UPDATE stock
+        SET available = available - #{qty},
+            version   = version + 1
+        WHERE sku_id = #{skuId}
+          AND available &gt;= #{qty}
+    </update>
+
+    <select id="selectBySkuId" resultType="com.flash.fulfill.inventory.entity.Stock">
+        SELECT id, sku_id, sku_name, available, locked, version, created_at, updated_at
+        FROM stock
+        WHERE sku_id = #{skuId}
+    </select>
+</mapper>

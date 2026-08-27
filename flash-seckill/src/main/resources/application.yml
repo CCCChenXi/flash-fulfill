@@ -1,0 +1,45 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: flash-seckill
+  threads:
+    virtual:
+      enabled: true
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 172.25.80.175:8848
+    sentinel:
+      transport:
+        dashboard: 8858
+        port: 8719
+      datasource:
+        flow-rules:
+          nacos:
+            server-addr: 8848
+            data-id: ${spring.application.name}-flow-rules
+            group-id: SENTINEL_GROUP
+            data-type: json
+            rule-type: flow
+  data:
+    redis:
+      host: 172.25.80.175
+      port: 6379
+
+rocketmq:
+  name-server: 172.25.80.175:9876
+  producer:
+    group: flash-seckill-producer
+    send-message-timeout: 3000
+
+seckill:
+  prededuct:
+    enabled: true
+  stock:
+    default: 100
+
+logging:
+  level:
+    com.flash.fulfill: INFO

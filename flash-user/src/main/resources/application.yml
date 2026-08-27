@@ -1,0 +1,42 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: flash-user
+  threads:
+    virtual:
+      enabled: true
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 172.25.80.175:8848
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/flash_user_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: cx348452
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: always
+  data:
+    redis:
+      host: 172.25.80.175
+      port: 6379
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.flash.fulfill.user.entity
+  configuration:
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    banner: false
+
+jwt:
+  secret: ${JWT_SECRET:flash-fulfill-demo-secret-0123456789abcdef}
+  expire-seconds: 86400
+
+logging:
+  level:
+    com.flash.fulfill: INFO
+    com.flash.fulfill.user.mapper: debug

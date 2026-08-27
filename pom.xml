@@ -27,6 +27,7 @@
         <module>flash-inventory</module>
         <module>flash-fulfillment</module>
         <module>flash-user</module>
+        <module>flash-product</module>
     </modules>
 
     <properties>

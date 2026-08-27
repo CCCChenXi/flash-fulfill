@@ -50,7 +50,12 @@ public class SkuCacheService {
     /** 出售视图:命中缓存直接返回,未命中回源 DB(含父 SPU 状态)并回填。 */
     public SkuSellView getSellView(Long skuId) {
         String key = keyOf(skuId);
-        String json = redisTemplate.opsForValue().get(key);
+        String json = null;
+        try {
+            json = redisTemplate.opsForValue().get(key);
+        } catch (RuntimeException e) {
+            log.warn("SKU 出售视图读缓存失败,回源重建 key={} err={}", key, e.getMessage());
+        }
         if (json != null) {
             try {
                 return objectMapper.readValue(json, SkuSellView.class);
@@ -65,7 +70,11 @@ public class SkuCacheService {
 
     /** 删除单个 SKU 缓存。 */
     public void evictSku(Long skuId) {
-        redisTemplate.delete(keyOf(skuId));
+        try {
+            redisTemplate.delete(keyOf(skuId));
+        } catch (RuntimeException e) {
+            log.warn("SKU 缓存删除失败 key={} err={}", keyOf(skuId), e.getMessage());
+        }
     }
 
     /** 删除指定 SPU 下所有 SKU 出售视图缓存(SPU 状态/名称变更影响子 SKU 视图)。 */
@@ -97,6 +106,8 @@ public class SkuCacheService {
             redisTemplate.opsForValue().set(key, objectMapper.writeValueAsString(view), Duration.ofSeconds(ttlSeconds));
         } catch (JsonProcessingException e) {
             log.warn("SKU 出售视图写缓存失败 key={} err={}", key, e.getMessage());
+        } catch (RuntimeException e) {
+            log.warn("SKU 出售视图写缓存异常 key={} err={}", key, e.getMessage());
         }
     }
 

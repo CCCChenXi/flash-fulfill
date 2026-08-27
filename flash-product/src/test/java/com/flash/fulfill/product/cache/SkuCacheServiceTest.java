@@ -17,10 +17,12 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -108,10 +110,29 @@ class SkuCacheServiceTest {
     }
 
     @Test
+    void getSellViewRedisGetFailsFallsBackToDb() {
+        when(valueOps.get(KEY)).thenThrow(new RuntimeException("redis down"));
+        when(skuMapper.selectById4View(200L)).thenReturn(buildSku());
+        when(spuMapper.selectById4View(100L)).thenReturn(buildSpu());
+
+        SkuSellView result = service.getSellView(200L);
+
+        assertEquals(200L, result.getSkuId());
+        assertEquals(0, result.getSpuStatus());
+    }
+
+    @Test
     void evictSkuDeletesKey() {
         service.evictSku(200L);
 
         verify(redisTemplate).delete(KEY);
+    }
+
+    @Test
+    void evictSkuRedisDeleteFailsNoThrow() {
+        doThrow(new RuntimeException("redis down")).when(redisTemplate).delete(KEY);
+
+        assertDoesNotThrow(() -> service.evictSku(200L));
     }
 
     @Test

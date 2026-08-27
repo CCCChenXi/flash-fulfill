@@ -23,6 +23,8 @@ public enum ErrorCode {
     USER_ALREADY_EXISTS(10007, "用户名已存在"),
     INVALID_CREDENTIALS(10008, "用户名或密码错误"),
     USER_NOT_FOUND(10009, "用户不存在"),
+    PRODUCT_NOT_FOUND(10010, "商品不存在"),
+    PRODUCT_OFF_SHELF(10011, "商品已下架"),
 
     SYSTEM_ERROR(5000, "系统繁忙，请稍后再试");
 

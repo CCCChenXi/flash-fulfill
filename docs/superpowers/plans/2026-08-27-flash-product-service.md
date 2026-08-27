@@ -1,4 +1,4 @@
-# flash-product 商品服务 — 实施计划
+﻿# flash-product 商品服务 — 实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -160,7 +160,71 @@ logging:
     com.flash.fulfill.product.mapper: debug
 ```
 
-- [ ] **Step 3: 写 `flash-product/src/main/resources/schema.sql`**（贴上用户原始四表 DDL，补充 `db` 前缀可选；务必含 spu/sku 的 `uk_sku_code`、`fk_sku_spu`；category/brand 两表照抄）
+- [ ] **Step 3: lash-product/src/main/resources/schema.sql** Four table DDL verbatim (with uk_sku_code and k_sku_spu):
+
+[snip DDL written to node]
+
+CREATE TABLE IF NOT EXISTS category (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'CATEGORY ID',
+    parent_id BIGINT NOT NULL DEFAULT 0 COMMENT 'parent category id: 0 means top-level',
+    name VARCHAR(100) NOT NULL COMMENT 'category name',
+    sort INT NOT NULL DEFAULT 0 COMMENT 'sort order',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT 'status: 0 disabled, 1 enabled',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_parent_id (parent_id),
+    KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='product category table';
+
+CREATE TABLE IF NOT EXISTS brand (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'BRAND ID',
+    name VARCHAR(100) NOT NULL COMMENT 'brand name',
+    logo VARCHAR(500) DEFAULT NULL COMMENT 'brand logo',
+    description VARCHAR(500) DEFAULT NULL COMMENT 'brand description',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT 'status: 0 disabled, 1 enabled',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_name (name),
+    KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='product brand table';
+
+CREATE TABLE IF NOT EXISTS spu (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'SPU ID',
+    name VARCHAR(200) NOT NULL COMMENT 'product name',
+    category_id BIGINT NOT NULL COMMENT 'category id',
+    brand_id BIGINT DEFAULT NULL COMMENT 'brand id',
+    description TEXT COMMENT 'product description',
+    main_image VARCHAR(500) DEFAULT NULL COMMENT 'main image',
+    status TINYINT NOT NULL DEFAULT 0 COMMENT 'status: 0 off shelf, 1 on shelf',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'create time',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'update time',
+    PRIMARY KEY (id),
+    KEY idx_category_id (category_id),
+    KEY idx_brand_id (brand_id),
+    KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='product SPU table';
+
+CREATE TABLE IF NOT EXISTS sku (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT 'SKU ID',
+    spu_id BIGINT NOT NULL COMMENT 'SPU ID',
+    sku_code VARCHAR(64) NOT NULL COMMENT 'SKU code',
+    name VARCHAR(200) NOT NULL COMMENT 'SKU name',
+    price DECIMAL(12,2) NOT NULL COMMENT 'sale price',
+    image VARCHAR(500) DEFAULT NULL COMMENT 'SKU image',
+    specs JSON DEFAULT NULL COMMENT 'spec info',
+    status TINYINT NOT NULL DEFAULT 0 COMMENT 'status: 0 off shelf, 1 on shelf',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'create time',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'update time',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_sku_code (sku_code),
+    KEY idx_spu_id (spu_id),
+    KEY idx_status (status),
+    CONSTRAINT fk_sku_spu FOREIGN KEY (spu_id) REFERENCES spu(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='product SKU table';
+
+
 
 - [ ] **Step 4: 写 `ProductApplication.java`**（`@SpringBootApplication @EnableDiscoveryClient @MapperScan("com.flash.fulfill.product.mapper")`）
 

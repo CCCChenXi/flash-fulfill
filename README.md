@@ -26,14 +26,18 @@
         │   flash-fulfillment     │
         │   :8084 (智能派单/履约)   │
         └─────────────────────────┘
+
+  支撑服务:
+  flash-user    :8085  (注册/登录/会话)
+  flash-product :8086  (SPU/SKU 商品与价格/上下架状态, 供 order 计价与 seckill 校验)
 ```
 
 ## 端到端演示链路
 
 ```
-curl 网关 ──► flash-seckill:预扣库存(Redis)
+curl 网关 ──► flash-seckill:校验 SPU/SKU 双上架(Feign→flash-product) + 预扣库存(Redis)
         ──► RocketMQ [FLASH_ORDER_CREATE]
-        ──► flash-order:幂等建单(INITIAL)
+        ──► flash-order:幂等建单(INITIAL) ──► Feign 取真实单价(flash-product)计算金额
         ──► Feign 调用 flash-inventory:原子条件扣减库存
         ──► 订单置 CREATED ──► RocketMQ [ORDER_FULFILL]
         ──► flash-fulfillment:落派单记录(仓库路由/运单号) ──► Feign 回调订单置 DISPATCHED
@@ -54,6 +58,8 @@ Nacos 2.3.2 · Redis 7 · RocketMQ 5.1.4 · MySQL 8.0 · Seata 2.0.0(占位)
 | flash-order | 8082 | 消费建单 → 幂等去重 → 建单 → Feign 扣库存 → 状态机流转 → 投递履约事件 |
 | flash-inventory | 8083 | 库存 SKU 管理、乐观锁条件扣减(单条 UPDATE 原子防超卖) |
 | flash-fulfillment | 8084 | 消费履约事件 → 智能仓库路由(简化) → 落派单记录 → 回调订单置已发货 |
+| flash-user | 8085 | 用户注册 / 登录(签发 JWT + Redis 会话) / 当前用户 |
+| flash-product | 8086 | SPU/SKU 两级商品模型、真实单价与上下架状态(Redis 缓存,order 计价与 seckill 校验来源) |
 
 ## 快速开始
 

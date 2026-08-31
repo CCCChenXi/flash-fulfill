@@ -1,0 +1,40 @@
+server:
+  port: 8088
+
+spring:
+  application:
+    name: flash-payment
+  threads:
+    virtual:
+      enabled: true
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 172.25.80.175:8848
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/flash_payment_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: cx348452
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: always
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.flash.fulfill.payment.entity
+  configuration:
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    banner: false
+
+payment:
+  outbox:
+    # 轮询本地消息表重推 markPaid:批量大小 / 轮询间隔(毫秒)
+    batch-size: 50
+    poll-interval-ms: 1000
+
+logging:
+  level:
+    com.flash.fulfill: INFO
+    com.flash.fulfill.payment.mapper: debug

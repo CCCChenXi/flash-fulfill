@@ -3,6 +3,7 @@ package com.flash.fulfill.product.service;
 import com.flash.fulfill.common.api.ErrorCode;
 import com.flash.fulfill.common.dto.SkuSellView;
 import com.flash.fulfill.common.exception.BizException;
+import com.flash.fulfill.product.cache.SeckillStatusWriter;
 import com.flash.fulfill.product.cache.SkuCacheService;
 import com.flash.fulfill.product.dto.SkuCreateCommand;
 import com.flash.fulfill.product.dto.SkuUpdateCommand;
@@ -31,13 +32,15 @@ class SkuServiceTest {
 
     private SkuMapper skuMapper;
     private SkuCacheService cacheService;
+    private SeckillStatusWriter seckillStatusWriter;
     private SkuService service;
 
     @BeforeEach
     void setUp() {
         skuMapper = mock(SkuMapper.class);
         cacheService = mock(SkuCacheService.class);
-        service = new SkuService(skuMapper, cacheService);
+        seckillStatusWriter = mock(SeckillStatusWriter.class);
+        service = new SkuService(skuMapper, cacheService, seckillStatusWriter);
     }
 
     private SkuCreateCommand buildCreateCommand() {
@@ -103,6 +106,8 @@ class SkuServiceTest {
 
             triggerAfterCommit();
             verify(cacheService).evictSku(300L);
+            verify(seckillStatusWriter).skuStatus(300L, true);
+            verify(seckillStatusWriter).skuPrice(300L, new BigDecimal("5999.00"));
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }
@@ -152,6 +157,8 @@ class SkuServiceTest {
 
             triggerAfterCommit();
             verify(cacheService).evictSku(200L);
+            verify(seckillStatusWriter).skuStatus(200L, false);
+            verify(seckillStatusWriter).skuPrice(200L, new BigDecimal("5999.00"));
 
             TransactionSynchronizationManager.clearSynchronization();
             TransactionSynchronizationManager.initSynchronization();
@@ -163,6 +170,7 @@ class SkuServiceTest {
 
             triggerAfterCommit();
             verify(cacheService, times(2)).evictSku(200L);
+            verify(seckillStatusWriter, times(2)).skuPrice(200L, new BigDecimal("5999.00"));
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }

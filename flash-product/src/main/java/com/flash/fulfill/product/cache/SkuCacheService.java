@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flash.fulfill.common.api.ErrorCode;
 import com.flash.fulfill.common.dto.SkuSellView;
 import com.flash.fulfill.common.exception.BizException;
+import com.flash.fulfill.product.constant.ProductCacheKeys;
 import com.flash.fulfill.product.entity.Sku;
 import com.flash.fulfill.product.entity.Spu;
 import com.flash.fulfill.product.mapper.SkuMapper;
@@ -25,8 +26,6 @@ import java.util.List;
 @Slf4j
 @Service
 public class SkuCacheService {
-
-    private static final String KEY_PREFIX = "product:sku:";
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
@@ -112,6 +111,6 @@ public class SkuCacheService {
     }
 
     private String keyOf(Long skuId) {
-        return KEY_PREFIX + skuId;
+        return ProductCacheKeys.SKU_VIEW_PREFIX + skuId;
     }
 }

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.flash.fulfill.order.mapper.OrderOutboxMapper">
+
+    <select id="selectPending" resultType="com.flash.fulfill.order.entity.OrderOutbox">
+        SELECT id, request_id, order_no, msg_type, msg_body, status, retry_count,
+               created_at, updated_at
+        FROM order_outbox
+        WHERE status = 'PENDING'
+        ORDER BY id
+        LIMIT #{limit}
+        FOR UPDATE SKIP LOCKED
+    </select>
+
+    <update id="markSent">
+        UPDATE order_outbox
+        SET status = 'SENT'
+        WHERE id = #{id}
+    </update>
+
+    <update id="incrementRetry">
+        UPDATE order_outbox
+        SET retry_count = retry_count + 1
+        WHERE id = #{id}
+    </update>
+</mapper>

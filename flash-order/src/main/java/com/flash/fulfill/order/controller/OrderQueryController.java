@@ -1,6 +1,7 @@
 package com.flash.fulfill.order.controller;
 
 import com.flash.fulfill.common.api.Result;
+import com.flash.fulfill.common.constant.ApiPaths;
 import com.flash.fulfill.common.dto.FlashOrderView;
 import com.flash.fulfill.order.service.OrderService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,7 +14,6 @@ import org.springframework.web.bind.annotation.RestController;
  * 订单查询接口。
  */
 @RestController
-@RequestMapping("/api/order")
 public class OrderQueryController {
 
     private final OrderService orderService;
@@ -25,12 +25,12 @@ public class OrderQueryController {
     /**
      * 客户端凭秒抢返回的 requestId 轮询订单状态。
      */
-    @GetMapping("/flash-orders")
+    @GetMapping(ApiPaths.ORDER_FLASH_ORDERS)
     public Result<FlashOrderView> queryByRequestId(@RequestParam("requestId") String requestId) {
         return Result.ok(orderService.queryByRequestId(requestId));
     }
 
-    @GetMapping("/orders/{orderNo}")
+    @GetMapping(ApiPaths.ORDER_ORDERS + "/{orderNo}")
     public Result<FlashOrderView> queryByOrderNo(@PathVariable("orderNo") String orderNo) {
         return Result.ok(orderService.queryByOrderNo(orderNo));
     }

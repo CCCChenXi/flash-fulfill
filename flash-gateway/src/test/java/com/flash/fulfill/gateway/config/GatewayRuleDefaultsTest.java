@@ -3,6 +3,7 @@ package com.flash.fulfill.gateway.config;
 import com.alibaba.csp.sentinel.adapter.gateway.common.SentinelGatewayConstants;
 import com.alibaba.csp.sentinel.adapter.gateway.common.api.ApiDefinition;
 import com.alibaba.csp.sentinel.adapter.gateway.common.rule.GatewayFlowRule;
+import com.flash.fulfill.gateway.constant.GatewayRuleConstants;
 import com.flash.fulfill.gateway.filter.ClientIdentityFilter;
 import org.junit.jupiter.api.Test;
 
@@ -50,6 +51,6 @@ class GatewayRuleDefaultsTest {
     void apiDefinitionMatchesAllPaths() {
         Set<ApiDefinition> defs = defaults.apiDefinitions();
 
-        assertTrue(defs.stream().anyMatch(api -> api.getApiName().equals(GatewayRuleDefaults.FLASH_API)));
+        assertTrue(defs.stream().anyMatch(api -> api.getApiName().equals(GatewayRuleConstants.FLASH_API)));
     }
 }

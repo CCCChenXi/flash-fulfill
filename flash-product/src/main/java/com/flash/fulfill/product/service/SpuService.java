@@ -1,7 +1,9 @@
 package com.flash.fulfill.product.service;
 
 import com.flash.fulfill.common.api.ErrorCode;
+import com.flash.fulfill.common.constant.ProductStatus;
 import com.flash.fulfill.common.exception.BizException;
+import com.flash.fulfill.product.cache.SeckillStatusWriter;
 import com.flash.fulfill.product.cache.SkuCacheService;
 import com.flash.fulfill.product.dto.SpuCreateCommand;
 import com.flash.fulfill.product.dto.SpuUpdateCommand;
@@ -21,15 +23,14 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 public class SpuService {
 
-    public static final int STATUS_ON_SHELF = 1;
-    public static final int STATUS_OFF_SHELF = 0;
-
     private final SpuMapper spuMapper;
     private final SkuCacheService cacheService;
+    private final SeckillStatusWriter seckillStatusWriter;
 
-    public SpuService(SpuMapper spuMapper, SkuCacheService cacheService) {
+    public SpuService(SpuMapper spuMapper, SkuCacheService cacheService, SeckillStatusWriter seckillStatusWriter) {
         this.spuMapper = spuMapper;
         this.cacheService = cacheService;
+        this.seckillStatusWriter = seckillStatusWriter;
     }
 
     /** 新建 SPU,默认上架。 */
@@ -41,8 +42,12 @@ public class SpuService {
         spu.setBrandId(cmd.getBrandId());
         spu.setDescription(cmd.getDescription());
         spu.setMainImage(cmd.getMainImage());
-        spu.setStatus(STATUS_ON_SHELF);
+        spu.setStatus(ProductStatus.ON_SHELF);
         spuMapper.insert(spu);
+        evictAfterCommit(() -> {
+            cacheService.evictSpu(spu.getId());
+            seckillStatusWriter.spuStatus(spu.getId(), true);
+        });
         log.info("新建 SPU 成功 spuId={}", spu.getId());
         return toView(spu);
     }
@@ -67,7 +72,10 @@ public class SpuService {
             spu.setMainImage(cmd.getMainImage());
         }
         spuMapper.updateById(spu);
-        evictAfterCommit(() -> cacheService.evictSpu(id));
+        evictAfterCommit(() -> {
+            cacheService.evictSpu(id);
+            seckillStatusWriter.spuStatus(id, spu.getStatus() == ProductStatus.ON_SHELF);
+        });
         log.info("更新 SPU 成功 spuId={}", id);
         return toView(spu);
     }
@@ -75,13 +83,13 @@ public class SpuService {
     /** 上架。 */
     @Transactional
     public SpuView onShelf(Long id) {
-        return setStatus(id, STATUS_ON_SHELF);
+        return setStatus(id, ProductStatus.ON_SHELF);
     }
 
     /** 下架。 */
     @Transactional
     public SpuView offShelf(Long id) {
-        return setStatus(id, STATUS_OFF_SHELF);
+        return setStatus(id, ProductStatus.OFF_SHELF);
     }
 
     @Transactional
@@ -93,7 +101,10 @@ public class SpuService {
         Spu spu = requireSpu(id);
         spu.setStatus(status);
         spuMapper.updateById(spu);
-        evictAfterCommit(() -> cacheService.evictSpu(id));
+        evictAfterCommit(() -> {
+            cacheService.evictSpu(id);
+            seckillStatusWriter.spuStatus(id, status == ProductStatus.ON_SHELF);
+        });
         log.info("SPU 状态变更成功 spuId={} status={}", id, status);
         return toView(spu);
     }

@@ -2,6 +2,7 @@ package com.flash.fulfill.product.service;
 
 import com.flash.fulfill.common.api.ErrorCode;
 import com.flash.fulfill.common.exception.BizException;
+import com.flash.fulfill.product.cache.SeckillStatusWriter;
 import com.flash.fulfill.product.cache.SkuCacheService;
 import com.flash.fulfill.product.dto.SpuCreateCommand;
 import com.flash.fulfill.product.dto.SpuUpdateCommand;
@@ -28,13 +29,15 @@ class SpuServiceTest {
 
     private SpuMapper spuMapper;
     private SkuCacheService cacheService;
+    private SeckillStatusWriter seckillStatusWriter;
     private SpuService service;
 
     @BeforeEach
     void setUp() {
         spuMapper = mock(SpuMapper.class);
         cacheService = mock(SkuCacheService.class);
-        service = new SpuService(spuMapper, cacheService);
+        seckillStatusWriter = mock(SeckillStatusWriter.class);
+        service = new SpuService(spuMapper, cacheService, seckillStatusWriter);
     }
 
     private SpuCreateCommand buildCreateCommand() {

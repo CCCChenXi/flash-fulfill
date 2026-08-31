@@ -3,6 +3,8 @@ package com.flash.fulfill.gateway.filter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flash.fulfill.common.api.ErrorCode;
 import com.flash.fulfill.common.api.Result;
+import com.flash.fulfill.common.constant.ApiPaths;
+import com.flash.fulfill.common.constant.HttpHeaderNames;
 import com.flash.fulfill.common.security.JwtUtils;
 import com.flash.fulfill.common.security.SessionKeys;
 import com.flash.fulfill.common.security.UserSession;
@@ -26,10 +28,10 @@ import java.util.List;
 /**
  * 网关鉴权过滤器。
  * <p>
- * 认证方式:
- * 1. JWT: {@code Authorization: Bearer <jwt>},校验签名并解析 userId 后,
- *    再查 Redis 会话 {@code user:session:{tokenHash}} 比对 userId,一致才放行并透传 X-User-Id;
- * 2. 兼容演示固定 token: {@code Bearer demo-token-001}(未接入真实登录前保留存量测试通道,跳过会话校验)。
+ * 认证方式:{@code Authorization: Bearer <jwt>},校验签名并解析 userId 后,
+ * 再查 Redis 会话 {@code user:session:{tokenHash}} 比对 userId,一致才放行并透传 X-User-Id。
+ * <p>
+ * 业务参数校验(如 requestId 非空)由各服务 controller 层 @Valid 负责,网关仅做鉴权与身份透传。
  * <p>
  * TODO 生产:密钥走配置中心/环境变量,支持多算法(RS256),登出时删除 Redis 会话即可实现踢下线。
  */
@@ -39,25 +41,20 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
 
     public static final int ORDER = -100;
 
-    private static final String BEARER_PREFIX = "Bearer ";
-
     /** 无需认证的公开接口(注册/登录) */
     private static final List<String> PUBLIC_PATHS = List.of(
-            "/api/user/login",
-            "/api/user/register");
+            ApiPaths.USER_LOGIN,
+            ApiPaths.USER_REGISTER);
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final JwtUtils jwtUtils;
-    private final String demoToken;
     private final ReactiveStringRedisTemplate redisTemplate;
 
     public JwtAuthFilter(
             @Value("${jwt.secret:flash-fulfill-demo-secret-0123456789abcdef}") String secret,
-            @Value("${jwt.expire-seconds:86400}") long expireSeconds,
-            @Value("${gateway.auth.demo-token:demo-token-001}") String demoToken,
+            @Value("${jwt.expire-seconds:" + JwtUtils.DEFAULT_EXPIRE_SECONDS + "}") long expireSeconds,
             ReactiveStringRedisTemplate redisTemplate) {
         this.jwtUtils = new JwtUtils(secret, expireSeconds);
-        this.demoToken = demoToken;
         this.redisTemplate = redisTemplate;
     }
 
@@ -68,10 +65,10 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange);
         }
         String authorization = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
+        if (authorization == null || !authorization.startsWith(HttpHeaderNames.BEARER_PREFIX)) {
             return unauthorized(exchange);
         }
-        String token = authorization.substring(BEARER_PREFIX.length());
+        String token = authorization.substring(HttpHeaderNames.BEARER_PREFIX.length());
 
         final Long userId;
         try {
@@ -108,7 +105,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
     }
 
     private ServerWebExchange withUserId(ServerWebExchange exchange, String userId) {
-        ServerHttpRequest request = exchange.getRequest().mutate().header("X-User-Id", userId).build();
+        ServerHttpRequest request = exchange.getRequest().mutate().header(HttpHeaderNames.X_USER_ID, userId).build();
         return exchange.mutate().request(request).build();
     }
 

@@ -34,6 +34,11 @@
             <artifactId>lombok</artifactId>
             <scope>provided</scope>
         </dependency>
+        <!-- Bean Validation 注解(供共享 DTO 携带 @NotBlank/@NotNull 等校验约束;实现由各服务 starter-validation 提供) -->
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+        </dependency>
         <!-- JWT 工具(jjwt 纯 Java,无 servlet 依赖,不破坏 flash-common 的轻量约束) -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

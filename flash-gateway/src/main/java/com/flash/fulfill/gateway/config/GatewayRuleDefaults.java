@@ -5,6 +5,8 @@ import com.alibaba.csp.sentinel.adapter.gateway.common.api.ApiDefinition;
 import com.alibaba.csp.sentinel.adapter.gateway.common.api.ApiPathPredicateItem;
 import com.alibaba.csp.sentinel.adapter.gateway.common.rule.GatewayFlowRule;
 import com.alibaba.csp.sentinel.adapter.gateway.common.rule.GatewayParamFlowItem;
+import com.flash.fulfill.common.constant.HttpHeaderNames;
+import com.flash.fulfill.gateway.constant.GatewayRuleConstants;
 import com.flash.fulfill.gateway.filter.ClientIdentityFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -20,8 +22,6 @@ import java.util.Set;
  */
 @Component
 public class GatewayRuleDefaults {
-
-    public static final String FLASH_API = "flash-api";
 
     private final long apiQps;
     private final long ipQps;
@@ -39,23 +39,23 @@ public class GatewayRuleDefaults {
     /** 默认流控规则:全局 / 按可信 IP / 按登录用户 */
     public Set<GatewayFlowRule> flowRules() {
         Set<GatewayFlowRule> rules = new HashSet<>();
-        rules.add(new GatewayFlowRule(FLASH_API)
+        rules.add(new GatewayFlowRule(GatewayRuleConstants.FLASH_API)
                 .setResourceMode(SentinelGatewayConstants.RESOURCE_MODE_CUSTOM_API_NAME)
                 .setCount(apiQps));
 
-        rules.add(new GatewayFlowRule(FLASH_API)
+        rules.add(new GatewayFlowRule(GatewayRuleConstants.FLASH_API)
                 .setResourceMode(SentinelGatewayConstants.RESOURCE_MODE_CUSTOM_API_NAME)
                 .setCount(ipQps)
                 .setParamItem(new GatewayParamFlowItem()
                         .setParseStrategy(SentinelGatewayConstants.PARAM_PARSE_STRATEGY_HEADER)
                         .setFieldName(ClientIdentityFilter.CLIENT_IP_HEADER)));
 
-        rules.add(new GatewayFlowRule(FLASH_API)
+        rules.add(new GatewayFlowRule(GatewayRuleConstants.FLASH_API)
                 .setResourceMode(SentinelGatewayConstants.RESOURCE_MODE_CUSTOM_API_NAME)
                 .setCount(userQps)
                 .setParamItem(new GatewayParamFlowItem()
                         .setParseStrategy(SentinelGatewayConstants.PARAM_PARSE_STRATEGY_HEADER)
-                        .setFieldName("X-User-Id")));
+                        .setFieldName(HttpHeaderNames.X_USER_ID)));
         return rules;
     }
 
@@ -64,7 +64,7 @@ public class GatewayRuleDefaults {
         Set<ApiDefinition> defs = new HashSet<>();
         Set<com.alibaba.csp.sentinel.adapter.gateway.common.api.ApiPredicateItem> predicates = new HashSet<>();
         predicates.add(new ApiPathPredicateItem().setPattern("/**"));
-        defs.add(new ApiDefinition(FLASH_API).setPredicateItems(predicates));
+        defs.add(new ApiDefinition(GatewayRuleConstants.FLASH_API).setPredicateItems(predicates));
         return defs;
     }
 }

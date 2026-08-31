@@ -14,7 +14,7 @@ public class JwtConfig {
     @Bean
     public JwtUtils jwtUtils(
             @Value("${jwt.secret:flash-fulfill-demo-secret-0123456789abcdef}") String secret,
-            @Value("${jwt.expire-seconds:86400}") long expireSeconds) {
+            @Value("${jwt.expire-seconds:" + JwtUtils.DEFAULT_EXPIRE_SECONDS + "}") long expireSeconds) {
         return new JwtUtils(secret, expireSeconds);
     }
 }

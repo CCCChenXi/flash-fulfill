@@ -2,6 +2,8 @@ package com.flash.fulfill.user.controller;
 
 import com.flash.fulfill.common.api.ErrorCode;
 import com.flash.fulfill.common.api.Result;
+import com.flash.fulfill.common.constant.ApiPaths;
+import com.flash.fulfill.common.constant.HttpHeaderNames;
 import com.flash.fulfill.common.exception.BizException;
 import com.flash.fulfill.common.security.JwtUtils;
 import com.flash.fulfill.user.dto.LoginCommand;
@@ -23,10 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
  * register / login 为公开接口(网关白名单),me 需认证。
  */
 @RestController
-@RequestMapping("/api/user")
 public class UserController {
-
-    private static final String BEARER_PREFIX = "Bearer ";
 
     private final UserService userService;
     private final JwtUtils jwtUtils;
@@ -37,21 +36,21 @@ public class UserController {
     }
 
     /** 注册 */
-    @PostMapping("/register")
+    @PostMapping(ApiPaths.USER_REGISTER)
     public Result<UserView> register(@Valid @RequestBody RegisterCommand cmd) {
         return Result.ok(userService.register(cmd));
     }
 
     /** 登录,签发 JWT */
-    @PostMapping("/login")
+    @PostMapping(ApiPaths.USER_LOGIN)
     public Result<LoginResponse> login(@Valid @RequestBody LoginCommand cmd) {
         return Result.ok(userService.login(cmd));
     }
 
     /** 当前用户:优先解析 Authorization token;无有效 token 时才回退网关透传的 X-User-Id(直连兜底) */
-    @GetMapping("/me")
+    @GetMapping(ApiPaths.USER_ME)
     public Result<UserView> me(
-            @RequestHeader(value = "X-User-Id", required = false) String xUserId,
+            @RequestHeader(value = HttpHeaderNames.X_USER_ID, required = false) String xUserId,
             @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
         Long userId = resolveUserId(xUserId, authorization);
         if (userId == null) {
@@ -61,9 +60,9 @@ public class UserController {
     }
 
     private Long resolveUserId(String xUserId, String authorization) {
-        if (authorization != null && authorization.startsWith(BEARER_PREFIX)) {
+        if (authorization != null && authorization.startsWith(HttpHeaderNames.BEARER_PREFIX)) {
             try {
-                return jwtUtils.parseUserId(authorization.substring(BEARER_PREFIX.length()));
+                return jwtUtils.parseUserId(authorization.substring(HttpHeaderNames.BEARER_PREFIX.length()));
             } catch (Exception ignored) {
                 // token 非法,继续尝试 X-User-Id 兜底
             }

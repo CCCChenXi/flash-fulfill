@@ -16,9 +16,23 @@
         WHERE request_id = #{requestId}
     </select>
 
-    <select id="existsByRequestId" resultType="boolean">
-        SELECT COUNT(*) &gt; 0
+    <select id="selectExpiredPending" resultType="com.flash.fulfill.order.entity.FlashOrder">
+        SELECT id, order_no, user_id, sku_id, activity_id, quantity, amount, status,
+               request_id, created_at, updated_at
         FROM flash_order
-        WHERE request_id = #{requestId}
+        WHERE status IN ('INITIAL', 'PENDING_PAYMENT')
+          AND created_at &lt; #{expireTime}
+        ORDER BY id
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectExpiredShipped" resultType="com.flash.fulfill.order.entity.FlashOrder">
+        SELECT id, order_no, user_id, sku_id, activity_id, quantity, amount, status,
+               request_id, created_at, updated_at
+        FROM flash_order
+        WHERE status = 'SHIPPED'
+          AND created_at &lt; #{expireTime}
+        ORDER BY id
+        LIMIT #{limit}
     </select>
 </mapper>

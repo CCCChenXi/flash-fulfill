@@ -1,5 +1,7 @@
 package com.flash.fulfill.common.security;
 
+import com.flash.fulfill.common.constant.RedisKeys;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -13,14 +15,12 @@ import java.util.HexFormat;
  */
 public final class SessionKeys {
 
-    private static final String PREFIX = "user:session:";
-
     private SessionKeys() {
     }
 
     /** 由 token 计算会话 key */
     public static String of(String token) {
-        return PREFIX + sha256Hex(token);
+        return RedisKeys.USER_SESSION_PREFIX + sha256Hex(token);
     }
 
     private static String sha256Hex(String token) {

@@ -1,24 +1,28 @@
 package com.flash.fulfill.common.constant;
 
 /**
- * 订单状态机(骨架版本)。
- * INITIAL -> CREATED -> DISPATCHED
- * INITIAL -> FAILED
- * CREATED -> CLOSED(超时关单, TODO 延迟消息实现)
+ * 订单状态机。
+ * <p>
+ * INITIAL ->(用户确认订单:填地址,后端校验金额)→ PENDING_PAYMENT ->(支付成功)→ PENDING_SHIPMENT
+ * ->(履约/仓库发货)→ SHIPPED ->(确认收货 / 超时自动确认)→ COMPLETED
+ * <p>
+ * 任意合适阶段可流转到 CANCELLED(取消)。INITIAL 同时作为订单行未落库(异步建单中)时的软状态。
  */
 public final class OrderStatus {
 
     private OrderStatus() {
     }
 
-    /** 创建中(已接收 MQ 命令) */
+    /** 初始状态(用户确认订单中 / 订单行未落库的软状态) */
     public static final String INITIAL = "INITIAL";
-    /** 已创建(支付成功占位) */
-    public static final String CREATED = "CREATED";
-    /** 创建失败(如库存扣减失败) */
-    public static final String FAILED = "FAILED";
-    /** 已发货(履约完成) */
-    public static final String DISPATCHED = "DISPATCHED";
-    /** 已关闭(超时未支付) */
-    public static final String CLOSED = "CLOSED";
+    /** 待支付 */
+    public static final String PENDING_PAYMENT = "PENDING_PAYMENT";
+    /** 待发货(已支付,等待履约发货) */
+    public static final String PENDING_SHIPMENT = "PENDING_SHIPMENT";
+    /** 已发货 */
+    public static final String SHIPPED = "SHIPPED";
+    /** 已完成 / 确认收货 */
+    public static final String COMPLETED = "COMPLETED";
+    /** 已取消 */
+    public static final String CANCELLED = "CANCELLED";
 }

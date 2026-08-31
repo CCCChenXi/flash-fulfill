@@ -1,0 +1,33 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: flash-relay
+  threads:
+    virtual:
+      enabled: true
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 172.25.80.175:8848
+  data:
+    redis:
+      host: 172.25.80.175
+      port: 6379
+
+rocketmq:
+  name-server: 172.25.80.175:9876
+  producer:
+    group: flash-relay-producer
+    send-message-timeout: 3000
+
+relay:
+  stream:
+    # 消费组 / 消费者名(StreamMessageListenerContainer 使用)
+    group: flash-seckill-order-relay
+    consumer: flash-relay-01
+
+logging:
+  level:
+    com.flash.fulfill: INFO

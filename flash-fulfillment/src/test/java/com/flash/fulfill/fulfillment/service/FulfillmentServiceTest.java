@@ -2,6 +2,7 @@ package com.flash.fulfill.fulfillment.service;
 
 import com.flash.fulfill.common.api.Result;
 import com.flash.fulfill.common.dto.OrderFulfillEvent;
+import com.flash.fulfill.fulfillment.constant.FulfillmentConstant;
 import com.flash.fulfill.fulfillment.entity.DispatchRecord;
 import com.flash.fulfill.fulfillment.feign.OrderClient;
 import com.flash.fulfill.fulfillment.mapper.DispatchRecordMapper;
@@ -55,7 +56,7 @@ class FulfillmentServiceTest {
         DispatchRecord saved = captor.getValue();
         assertEquals("FF1234567890", saved.getOrderNo());
         assertNotNull(saved.getWarehouseCode());
-        assertEquals(FulfillmentService.DispatchStatus.DISPATCHED, saved.getStatus());
+        assertEquals(FulfillmentConstant.STATUS_DISPATCHED, saved.getStatus());
         assertNotNull(saved.getTrackingNo());
 
         verify(orderClient).markDispatched("FF1234567890");
@@ -88,3 +89,4 @@ class FulfillmentServiceTest {
         assertNotNull(router.route(7L, 9L));
     }
 }
+

@@ -35,8 +35,6 @@ mybatis-plus:
 product:
   cache:
     secs: 600
-  seed:
-    enabled: true
 
 logging:
   level:

@@ -1,8 +1,10 @@
 package com.flash.fulfill.product.service;
 
 import com.flash.fulfill.common.api.ErrorCode;
+import com.flash.fulfill.common.constant.ProductStatus;
 import com.flash.fulfill.common.dto.SkuSellView;
 import com.flash.fulfill.common.exception.BizException;
+import com.flash.fulfill.product.cache.SeckillStatusWriter;
 import com.flash.fulfill.product.cache.SkuCacheService;
 import com.flash.fulfill.product.dto.SkuCreateCommand;
 import com.flash.fulfill.product.dto.SkuUpdateCommand;
@@ -22,15 +24,14 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 public class SkuService {
 
-    public static final int STATUS_ON_SHELF = 1;
-    public static final int STATUS_OFF_SHELF = 0;
-
     private final SkuMapper skuMapper;
     private final SkuCacheService cacheService;
+    private final SeckillStatusWriter seckillStatusWriter;
 
-    public SkuService(SkuMapper skuMapper, SkuCacheService cacheService) {
+    public SkuService(SkuMapper skuMapper, SkuCacheService cacheService, SeckillStatusWriter seckillStatusWriter) {
         this.skuMapper = skuMapper;
         this.cacheService = cacheService;
+        this.seckillStatusWriter = seckillStatusWriter;
     }
 
     /** 新建 SKU,默认上架;sku_code 唯一。 */
@@ -46,9 +47,13 @@ public class SkuService {
         sku.setPrice(cmd.getPrice());
         sku.setImage(cmd.getImage());
         sku.setSpecs(cmd.getSpecs());
-        sku.setStatus(STATUS_ON_SHELF);
+        sku.setStatus(ProductStatus.ON_SHELF);
         skuMapper.insert(sku);
-        evictAfterCommit(() -> cacheService.evictSku(sku.getId()));
+        evictAfterCommit(() -> {
+            cacheService.evictSku(sku.getId());
+            seckillStatusWriter.skuStatus(sku.getId(), true);
+            seckillStatusWriter.skuPrice(sku.getId(), sku.getPrice());
+        });
         log.info("新建 SKU 成功 skuId={}", sku.getId());
         return toView(sku);
     }
@@ -73,20 +78,28 @@ public class SkuService {
             sku.setStatus(cmd.getStatus());
         }
         skuMapper.updateById(sku);
-        evictAfterCommit(() -> cacheService.evictSku(id));
+        evictAfterCommit(() -> {
+            cacheService.evictSku(id);
+            seckillStatusWriter.skuStatus(id, sku.getStatus() == ProductStatus.ON_SHELF);
+            seckillStatusWriter.skuPrice(id, sku.getPrice());
+        });
         log.info("更新 SKU 成功 skuId={}", id);
         return toView(sku);
     }
 
     @Transactional
     public SkuView setStatus(Long id, int status) {
-        if (status != STATUS_ON_SHELF && status != STATUS_OFF_SHELF) {
+        if (status != ProductStatus.ON_SHELF && status != ProductStatus.OFF_SHELF) {
             throw new BizException(ErrorCode.INVALID_PARAM, "status 只能为 0 或 1");
         }
         Sku sku = requireSku(id);
         sku.setStatus(status);
         skuMapper.updateById(sku);
-        evictAfterCommit(() -> cacheService.evictSku(id));
+        evictAfterCommit(() -> {
+            cacheService.evictSku(id);
+            seckillStatusWriter.skuStatus(id, status == ProductStatus.ON_SHELF);
+            seckillStatusWriter.skuPrice(id, sku.getPrice());
+        });
         log.info("SKU 状态变更成功 skuId={} status={}", id, status);
         return toView(sku);
     }

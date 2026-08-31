@@ -2,115 +2,70 @@ package com.flash.fulfill.seckill.service;
 
 import com.flash.fulfill.common.api.ErrorCode;
 import com.flash.fulfill.common.api.Result;
-import com.flash.fulfill.common.constant.MqTopics;
+import com.flash.fulfill.common.constant.SeckillResultCode;
 import com.flash.fulfill.common.dto.FlashOrderResponse;
 import com.flash.fulfill.common.dto.SeckillOrderCommand;
 import com.flash.fulfill.common.exception.BizException;
-import com.flash.fulfill.common.dto.SkuSellView;
-import com.flash.fulfill.common.util.IdGenerator;
-import com.flash.fulfill.seckill.deductor.StockPreDeductor;
-import com.flash.fulfill.seckill.feign.ProductClient;
+import com.flash.fulfill.seckill.script.SeckillScriptExecutor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.rocketmq.client.producer.SendResult;
-import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
  * 秒抢下单服务。
  * <p>
- * 流程:参数校验 → Redis 预扣(可选) → 发送 MQ 命令(FLASH_ORDER_CREATE) → 立即返回受理结果。
+ * 流程:参数校验 → Lua 原子幂等(状态机占位 + 限购 + 库存扣减 + 写建单事件到 Redis Stream) → 按状态码分派。
+ * 扣减成功即"已受理"并返回,事件由独立 flash-relay 服务消费转发 RocketMQ,请求线程不再同步发送 MQ。
  * <p>
- * TODO 生产增强:
- * 1. RocketMQ 事务消息:本地预扣 + 事务发送二阶段,避免"预扣成功但消息未达";
- * 2. 失败兜底:对账任务核对 redis 预扣与订单/库存,回滚超时未支付的预扣额度;
- * 3. 15 分钟超时关单由 order 侧延迟队列完成。
+ * 该设计消除了"扣减库存"与"发送消息"之间的不一致窗口:扣减与写事件同一次 EVAL 原子完成,
+ * 消息投递由 relay 异步可靠重试,不存在"MQ 已发但客户端超时误回滚"的时序问题。
+ * <p>
+ * TODO 生产增强:对账回滚超时未支付的预扣额度。
  */
 @Slf4j
 @Service
 public class SeckillService {
 
-    private final StockPreDeductor stockPreDeductor;
-    private final RocketMQTemplate rocketMQTemplate;
-    private final ProductClient productClient;
+    private final SeckillScriptExecutor scriptExecutor;
 
-    @Value("${seckill.prededuct.enabled:true}")
-    private boolean predeductEnabled;
+    @Value("${seckill.buy.limit:1}")
+    private int buyLimit;
 
-    public SeckillService(StockPreDeductor stockPreDeductor, RocketMQTemplate rocketMQTemplate,
-                          ProductClient productClient) {
-        this.stockPreDeductor = stockPreDeductor;
-        this.rocketMQTemplate = rocketMQTemplate;
-        this.productClient = productClient;
+    @Value("${seckill.req.ttl.secs:600}")
+    private int reqTtlSeconds;
+
+    public SeckillService(SeckillScriptExecutor scriptExecutor) {
+        this.scriptExecutor = scriptExecutor;
     }
 
     public Result<FlashOrderResponse> createFlashOrder(SeckillOrderCommand cmd) {
-        validate(cmd);
-        validateSellable(cmd);
+        int resultCode = scriptExecutor.execute(cmd, buyLimit, reqTtlSeconds);
 
-        if (predeductEnabled && !stockPreDeductor.tryPreDeduct(cmd.getSkuId(), cmd.getQuantity())) {
-            throw new BizException(ErrorCode.STOCK_NOT_ENOUGH);
-        }
-
-        if (cmd.getRequestId() == null || cmd.getRequestId().isBlank()) {
-            cmd.setRequestId(IdGenerator.requestId());
-        }
-
-        String destination = MqTopics.FLASH_ORDER_CREATE + ":" + MqTopics.TAG_ORDER_CREATE;
-        try {
-            SendResult sendResult = rocketMQTemplate.syncSend(destination, cmd, 3000);
-            log.info("发送建单命令成功 requestId={} sendResult={}", cmd.getRequestId(), sendResult.getSendStatus());
-        } catch (Exception e) {
-            // 发送失败:回滚预扣,避免库存泄漏
-            rollbackIfNeeded(cmd);
-            throw new BizException(ErrorCode.SYSTEM_ERROR, "下单请求排队失败,请稍后重试");
-        }
-
-        return Result.ok(new FlashOrderResponse(cmd.getRequestId(), "下单请求已受理,正在异步创建订单"));
-    }
-
-    private void rollbackIfNeeded(SeckillOrderCommand cmd) {
-        try {
-            if (predeductEnabled) {
-                stockPreDeductor.rollback(cmd.getSkuId(), cmd.getQuantity());
-            }
-        } catch (Exception e) {
-            log.error("回滚预扣库存失败 skuId={} quantity={}", cmd.getSkuId(), cmd.getQuantity(), e);
+        switch (resultCode) {
+            case SeckillResultCode.SUCCESS:
+                return accepted(cmd);
+            case SeckillResultCode.OFF_SHELF:
+                return Result.ok(new FlashOrderResponse(cmd.getRequestId(), "商品已下架", SeckillResultCode.OFF_SHELF));
+            case SeckillResultCode.STOCK_NOT_ENOUGH:
+                return Result.ok(new FlashOrderResponse(cmd.getRequestId(), "库存不足", SeckillResultCode.STOCK_NOT_ENOUGH));
+            case SeckillResultCode.NOT_EXIST:
+                return Result.ok(new FlashOrderResponse(cmd.getRequestId(), "商品不存在", SeckillResultCode.NOT_EXIST));
+            case SeckillResultCode.PROCESSING:
+                return Result.ok(new FlashOrderResponse(cmd.getRequestId(), "下单处理中,请勿重复提交", SeckillResultCode.PROCESSING));
+            case SeckillResultCode.LIMIT:
+                return Result.ok(new FlashOrderResponse(cmd.getRequestId(), "已达限购数量", SeckillResultCode.LIMIT));
+            case SeckillResultCode.PRICE_UNAVAILABLE:
+                return Result.ok(new FlashOrderResponse(cmd.getRequestId(), "商品价格未就绪,请稍后重试", SeckillResultCode.PRICE_UNAVAILABLE));
+            case SeckillResultCode.INVALID_PARAM:
+                throw new BizException(ErrorCode.INVALID_PARAM, "购买数量非法");
+            default:
+                throw new BizException(ErrorCode.SYSTEM_ERROR);
         }
     }
 
-    private void validate(SeckillOrderCommand cmd) {
-        if (cmd == null || cmd.getUserId() == null || cmd.getSkuId() == null
-                || cmd.getQuantity() == null || cmd.getQuantity() <= 0) {
-            throw new BizException(ErrorCode.INVALID_PARAM, "userId/skuId/quantity 为必填且 quantity 需大于 0");
-        }
-    }
-
-    /**
-     * 校验商品 SPU/SKU 双上架状态,于预扣库存前执行。
-     */
-    private void validateSellable(SeckillOrderCommand cmd) {
-        SkuSellView view;
-        try {
-            Result<SkuSellView> result = productClient.sellView(cmd.getSkuId());
-            if (result == null || !result.isSuccess() || result.getData() == null) {
-                throw new BizException(ErrorCode.PRODUCT_NOT_FOUND);
-            }
-            view = result.getData();
-        } catch (BizException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("调用商品服务校验可买异常 skuId={}", cmd.getSkuId(), e);
-            throw new BizException(ErrorCode.SYSTEM_ERROR);
-        }
-
-        if (view.getSkuStatus() == null || view.getSpuStatus() == null) {
-            throw new BizException(ErrorCode.PRODUCT_NOT_FOUND);
-        }
-        if (view.getSkuStatus() != 1 || view.getSpuStatus() != 1) {
-            log.warn("商品已下架不可售 skuId={} skuStatus={} spuStatus={}",
-                    cmd.getSkuId(), view.getSkuStatus(), view.getSpuStatus());
-            throw new BizException(ErrorCode.PRODUCT_OFF_SHELF);
-        }
+    /** 扣减成功即受理:建单事件已写入 Stream,由 relay 异步转发,无需请求线程等待 MQ。 */
+    private Result<FlashOrderResponse> accepted(SeckillOrderCommand cmd) {
+        log.info("秒杀下单已受理 requestId={} skuId={} userId={}", cmd.getRequestId(), cmd.getSkuId(), cmd.getUserId());
+        return Result.ok(new FlashOrderResponse(cmd.getRequestId(), "下单请求已受理,正在异步创建订单", SeckillResultCode.SUCCESS));
     }
 }

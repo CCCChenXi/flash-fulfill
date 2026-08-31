@@ -35,10 +35,12 @@ rocketmq:
     send-message-timeout: 3000
 
 seckill:
-  prededuct:
-    enabled: true
-  stock:
-    default: 100
+  buy:
+    # 每人每活动每 SKU 限购数量
+    limit: 1
+  req:
+    ttl:
+      secs: 600
 
 logging:
   level:

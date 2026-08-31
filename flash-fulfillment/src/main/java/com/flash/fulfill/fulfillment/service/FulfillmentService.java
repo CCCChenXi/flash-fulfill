@@ -4,6 +4,7 @@ import com.flash.fulfill.common.api.ErrorCode;
 import com.flash.fulfill.common.api.Result;
 import com.flash.fulfill.common.dto.OrderFulfillEvent;
 import com.flash.fulfill.common.exception.BizException;
+import com.flash.fulfill.fulfillment.constant.FulfillmentConstant;
 import com.flash.fulfill.fulfillment.entity.DispatchRecord;
 import com.flash.fulfill.fulfillment.feign.OrderClient;
 import com.flash.fulfill.fulfillment.mapper.DispatchRecordMapper;
@@ -53,9 +54,11 @@ public class FulfillmentService {
         record.setSkuId(event.getSkuId());
         record.setQuantity(event.getQuantity());
         record.setWarehouseCode(warehouseRouter.route(event.getSkuId(), event.getUserId()));
-        record.setCarrierCode("SF-DEMO");
-        record.setTrackingNo("SF" + event.getOrderNo().substring(Math.max(0, event.getOrderNo().length() - 12)));
-        record.setStatus(DispatchStatus.DISPATCHED);
+        record.setCarrierCode(FulfillmentConstant.CARRIER_CODE_DEFAULT);
+        record.setTrackingNo(FulfillmentConstant.TRACKING_NO_PREFIX
+                + event.getOrderNo().substring(Math.max(0,
+                        event.getOrderNo().length() - FulfillmentConstant.TRACKING_NO_SUFFIX_LENGTH)));
+        record.setStatus(FulfillmentConstant.STATUS_DISPATCHED);
         dispatchRecordMapper.insert(record);
         log.info("已派单 orderNo={} warehouse={} trackingNo={}",
                 event.getOrderNo(), record.getWarehouseCode(), record.getTrackingNo());
@@ -79,13 +82,5 @@ public class FulfillmentService {
             throw new BizException(ErrorCode.NOT_FOUND, "未找到派单记录:" + orderNo);
         }
         return record;
-    }
-
-    public static final class DispatchStatus {
-        private DispatchStatus() {
-        }
-
-        public static final String DISPATCHED = "DISPATCHED";
-        public static final String DELIVERED = "DELIVERED";
     }
 }

@@ -12,7 +12,7 @@
 
     <artifactId>flash-order</artifactId>
     <name>flash-order</name>
-    <description>订单中心:消息建单 / Feign 扣库存 / 状态机流转</description>
+    <description>订单中心:消息建单(事务性 Outbox) / 状态机流转</description>
 
     <dependencies>
         <dependency>
@@ -22,14 +22,6 @@
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-openfeign</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baomidou</groupId>

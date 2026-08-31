@@ -28,6 +28,21 @@ mybatis-plus:
   global-config:
     banner: false
 
+order:
+  outbox:
+    # 本地消息表轮询转发:批量大小 / 轮询间隔(毫秒)
+    batch-size: 50
+    poll-interval-ms: 1000
+  timeout-cancel:
+    # 待支付超时关单:超时分钟数 / 扫描间隔(毫秒) / 每批数量
+    minutes: 15
+    poll-interval-ms: 60000
+    batch-size: 100
+  auto-complete:
+    # 已发货超时自动确认收货:超时天数 / 扫描间隔(毫秒)
+    days: 7
+    poll-interval-ms: 3600000
+
 rocketmq:
   name-server: 172.25.80.175:9876
   producer:

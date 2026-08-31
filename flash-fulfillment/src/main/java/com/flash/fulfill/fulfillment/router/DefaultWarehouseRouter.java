@@ -14,8 +14,12 @@ import java.util.Map;
 @Component
 public class DefaultWarehouseRouter implements WarehouseRouter {
 
+    private static final String WAREHOUSE_SH = "WH-SH";
+    private static final String WAREHOUSE_BJ = "WH-BJ";
+    private static final String WAREHOUSE_GZ = "WH-GZ";
+
     private static final Map<Integer, String> WAREHOUSES = Map.of(
-            0, "WH-SH", 1, "WH-BJ", 2, "WH-GZ"
+            0, WAREHOUSE_SH, 1, WAREHOUSE_BJ, 2, WAREHOUSE_GZ
     );
 
     @Override

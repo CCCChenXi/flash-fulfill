@@ -42,6 +42,10 @@ spring:
           uri: lb://flash-product
           predicates:
             - Path=/api/product/**
+        - id: flash-payment-route
+          uri: lb://flash-payment
+          predicates:
+            - Path=/api/payment/**
     sentinel:
       # Sentinel 控制台地址(可选,无控制台不影响启动)
       transport:
@@ -52,9 +56,6 @@ spring:
       port: 6379
 
 gateway:
-  auth:
-    # 演示用固定 token,生产环境替换为 JWT 签发/校验
-    demo-token: demo-token-001
   rate-limit:
     # Sentinel 网关限流(SentinelGatewayConfig 加载基线规则,Nacos 下发可覆盖)
     api-qps: 5000   # 全局 API 维度 QPS 上限(兜底默认)

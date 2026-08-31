@@ -38,7 +38,7 @@ class JwtAuthFilterTest {
         redisTemplate = mock(ReactiveStringRedisTemplate.class);
         valueOps = mock(ReactiveValueOperations.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        filter = new JwtAuthFilter(SECRET, 86400, "demo-token-001", redisTemplate);
+        filter = new JwtAuthFilter(SECRET, 86400, redisTemplate);
     }
 
     private String sessionJson(Long userId) {

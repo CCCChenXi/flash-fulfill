@@ -1,5 +1,6 @@
 package com.flash.fulfill.gateway.filter;
 
+import com.flash.fulfill.common.constant.HttpHeaderNames;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -24,7 +25,12 @@ public class ClientIdentityFilter implements GlobalFilter, Ordered {
 
     public static final int ORDER = -200;
 
-    public static final String CLIENT_IP_HEADER = "X-Flash-Client-IP";
+    public static final String CLIENT_IP_HEADER = HttpHeaderNames.X_CLIENT_IP;
+
+    private static final String UNKNOWN_IP = "unknown";
+
+    /** X-Forwarded-For 链中取最左(原始客户端)IP 的分隔符 */
+    private static final String FORWARDED_SEPARATOR = ",";
 
     private final List<String> trustedProxies;
 
@@ -45,16 +51,16 @@ public class ClientIdentityFilter implements GlobalFilter, Ordered {
         InetSocketAddress remote = exchange.getRequest().getRemoteAddress();
         String remoteIp = remote != null ? remote.getAddress().getHostAddress() : null;
         if (remoteIp != null && trustedProxies.contains(remoteIp)) {
-            String forwarded = exchange.getRequest().getHeaders().getFirst("X-Forwarded-For");
+            String forwarded = exchange.getRequest().getHeaders().getFirst(HttpHeaderNames.X_FORWARDED_FOR);
             if (forwarded != null && !forwarded.isBlank()) {
-                return forwarded.split(",")[0].trim();
+                return forwarded.split(FORWARDED_SEPARATOR)[0].trim();
             }
-            String realIp = exchange.getRequest().getHeaders().getFirst("X-Real-IP");
+            String realIp = exchange.getRequest().getHeaders().getFirst(HttpHeaderNames.X_REAL_IP);
             if (realIp != null && !realIp.isBlank()) {
                 return realIp;
             }
         }
-        return remoteIp != null ? remoteIp : "unknown";
+        return remoteIp != null ? remoteIp : UNKNOWN_IP;
     }
 
     @Override

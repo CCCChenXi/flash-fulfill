@@ -1,6 +1,7 @@
 package com.flash.fulfill.user.session;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.flash.fulfill.common.security.JwtUtils;
 import com.flash.fulfill.common.security.SessionKeys;
 import com.flash.fulfill.common.security.UserSession;
 import com.flash.fulfill.user.dto.UserView;
@@ -29,7 +30,7 @@ public class UserSessionStore {
     public UserSessionStore(
             StringRedisTemplate redisTemplate,
             ObjectMapper objectMapper,
-            @Value("${jwt.expire-seconds:86400}") long expireSeconds) {
+            @Value("${jwt.expire-seconds:" + JwtUtils.DEFAULT_EXPIRE_SECONDS + "}") long expireSeconds) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
         this.expireSeconds = expireSeconds;

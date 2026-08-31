@@ -28,6 +28,8 @@
         <module>flash-fulfillment</module>
         <module>flash-user</module>
         <module>flash-product</module>
+        <module>flash-relay</module>
+        <module>flash-payment</module>
     </modules>
 
     <properties>

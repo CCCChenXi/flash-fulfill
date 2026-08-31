@@ -1,5 +1,6 @@
 package com.flash.fulfill.common.security;
 
+import com.flash.fulfill.common.constant.HttpHeaderNames;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -25,7 +26,7 @@ public class JwtUtils {
 
     public static final long DEFAULT_EXPIRE_SECONDS = 86400L;
 
-    private static final String BEARER_PREFIX = "Bearer ";
+    private static final String BEARER_PREFIX = HttpHeaderNames.BEARER_PREFIX;
 
     /** HS256 要求密钥至少 256 位 = 32 字节 */
     private static final int MIN_SECRET_BYTES = 32;

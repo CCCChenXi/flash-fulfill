@@ -35,8 +35,9 @@
 ## 端到端演示链路
 
 ```
-curl 网关 ──► flash-seckill:校验 SPU/SKU 双上架(Feign→flash-product) + 预扣库存(Redis)
-        ──► RocketMQ [FLASH_ORDER_CREATE]
+curl 网关 ──► flash-seckill:Lua 原子校验(Spu/Sku 双上架状态 + 库存)并预扣(Redis)
+        ──► 扣减成功即 XADD 建单事件到 Redis Stream(与扣减同一次 EVAL,原子) → 返回"已受理"
+        ──► flash-relay:消费 Redis Stream 事件 → 转发 RocketMQ [FLASH_ORDER_CREATE] → ACK
         ──► flash-order:幂等建单(INITIAL) ──► Feign 取真实单价(flash-product)计算金额
         ──► Feign 调用 flash-inventory:原子条件扣减库存
         ──► 订单置 CREATED ──► RocketMQ [ORDER_FULFILL]
@@ -54,12 +55,13 @@ Nacos 2.3.2 · Redis 7 · RocketMQ 5.1.4 · MySQL 8.0 · Seata 2.0.0(占位)
 | :-- | --: | :-- |
 | flash-common | - | 统一返回 Result / 错误码 / 全局异常 / MQ 契约 / DTO / ID 生成 |
 | flash-gateway | 8080 | 网关路由、演示鉴权(Bearer token)、内存令牌桶防刷、Sentinel 依赖占位 |
-| flash-seckill | 8081 | 秒抢下单:Redis DECR 预扣(简化版) → 投递建单命令 |
+| flash-seckill | 8081 | 秒抢下单:Lua 幂等状态机(requestId 占位 SPU/SKU 状态+限购+库存原子扣减) → 投递建单命令,按业务状态码返回 |
 | flash-order | 8082 | 消费建单 → 幂等去重 → 建单 → Feign 扣库存 → 状态机流转 → 投递履约事件 |
 | flash-inventory | 8083 | 库存 SKU 管理、乐观锁条件扣减(单条 UPDATE 原子防超卖) |
 | flash-fulfillment | 8084 | 消费履约事件 → 智能仓库路由(简化) → 落派单记录 → 回调订单置已发货 |
 | flash-user | 8085 | 用户注册 / 登录(签发 JWT + Redis 会话) / 当前用户 |
 | flash-product | 8086 | SPU/SKU 两级商品模型、真实单价与上下架状态(Redis 缓存,order 计价与 seckill 校验来源) |
+| flash-relay | 8087 | 事件转发:消费 Redis Stream 秒杀建单事件 → 转发 RocketMQ(保证"扣库存+记事件"原子,投递失败重读重发) |
 
 ## 快速开始
 
@@ -93,15 +95,17 @@ java -jar flash-fulfillment/target/flash-fulfillment-1.0.0-SNAPSHOT.jar
 ### 4. 跑通全链路(curl)
 
 ```bash
-# ① 提交秒抢下单(经网关,带演示 token)
+# ① 提交秒抢下单(经网关,带演示 token + 客户端 requestId;requestId 非空由网关校验)
 curl -i http://localhost:8080/api/seckill/flash-orders \
   -H "Authorization: Bearer demo-token-001" \
   -H "X-User-Id: 1001" \
   -H "Content-Type: application/json" \
-  -d '{"userId":1001,"skuId":1001,"activityId":1,"quantity":1}'
+  -d '{"requestId":"flash-demo-001","userId":1001,"skuId":1001,"spuId":1,"activityId":1,"quantity":1}'
 
-# 返回 data.requestId,例如:
-# {"code":200,"message":"成功","data":{"requestId":"xxxxxx","message":"下单请求已受理,正在异步创建订单"}}
+# 返回 data.requestId 与业务状态码 status,例如:
+# {"code":200,"message":"成功","data":{"requestId":"flash-demo-001","message":"下单请求已受理,正在异步创建订单","status":0}}
+# status: 0 成功 / 1 参数非法 / 2 商品下架 / 3 库存不足 / 4 商品或库存不存在 / 5 处理中 / 6 已达限购
+# 重复提交同一 requestId:命中幂等缓存直接返回上次结果(仅库存不足可换 requestId 重试)
 
 # ② 轮询订单状态(注意替换为上面的 requestId)
 curl "http://localhost:8080/api/order/flash-orders?requestId=xxxxxx" \
